@@ -1,0 +1,379 @@
+/* Phone-first base styles & variables */
+:root {
+  --bg-page: #f8f9fa;
+  --bg-surface: #ffffff;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --border-color: #d1d5db;
+  --border-focus: #1d4ed8;
+  --btn-primary-bg: #111827;
+  --btn-primary-text: #ffffff;
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-text: #111827;
+  --btn-secondary-border: #111827;
+
+  /* Status chips (UX_SPEC.md §1) */
+  --status-confirmed-bg: #e6f4ea;
+  --status-confirmed-text: #137333;
+  --status-confirmed-border: #137333;
+
+  --status-planned-bg: #e8f0fe;
+  --status-planned-text: #1a73e8;
+  --status-planned-border: #1a73e8;
+
+  --status-unknown-bg: #fef7e0;
+  --status-unknown-text: #92400e;
+  --status-unknown-border: #b45309;
+
+  --status-not-needed-bg: #f3f4f6;
+  --status-not-needed-text: #4b5563;
+  --status-not-needed-border: #6b7280;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: 84px; /* Clearance for bottom tab bar */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Headings & general text */
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+p {
+  font-size: 1rem;
+}
+
+/* Accessible interactive elements: tap targets >= 44px */
+button,
+input,
+select,
+textarea,
+.btn {
+  font-family: inherit;
+  font-size: 1rem;
+  min-height: 44px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  border: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:focus-visible,
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.btn-primary:hover {
+  background-color: #374151;
+}
+
+.btn-secondary {
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border: 2px solid var(--btn-secondary-border);
+}
+
+.btn-secondary:hover {
+  background-color: #f3f4f6;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+/* Status chips per UX_SPEC.md §1 (Green, Blue, Amber, Grey with text labels) */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  line-height: 1.2;
+}
+
+.chip-confirmed {
+  background-color: var(--status-confirmed-bg);
+  color: var(--status-confirmed-text);
+  border: 1px solid var(--status-confirmed-border);
+}
+
+.chip-planned {
+  background-color: var(--status-planned-bg);
+  color: var(--status-planned-text);
+  border: 1px solid var(--status-planned-border);
+}
+
+.chip-unknown {
+  background-color: var(--status-unknown-bg);
+  color: var(--status-unknown-text);
+  border: 1px solid var(--status-unknown-border);
+}
+
+.chip-not_needed,
+.chip-not-needed {
+  background-color: var(--status-not-needed-bg);
+  color: var(--status-not-needed-text);
+  border: 1px solid var(--status-not-needed-border);
+}
+
+/* Home view styles */
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.settings-link:hover {
+  background-color: #e5e7eb;
+}
+
+.home-actions {
+  margin-bottom: 24px;
+}
+
+.inline-form {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.form-buttons-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-buttons-row button {
+  flex: 1;
+}
+
+.form-error {
+  color: #b91c1c;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* Trek list & cards */
+.trek-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trek-card {
+  display: block;
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.trek-card:hover {
+  border-color: var(--text-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.trek-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.trek-card-dates {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+/* Empty state */
+.empty-state {
+  background-color: var(--bg-surface);
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* Generic page containers & placeholders */
+.page-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 600;
+  align-self: flex-start;
+  padding: 4px 0;
+}
+
+.back-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.placeholder-card {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.placeholder-message {
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+/* Bottom tab bar for trek pages */
+.bottom-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-surface);
+  border-top: 2px solid var(--border-color);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+}
+
+.tab-bar-container {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 8px 4px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-top: 3px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.tab-item:hover {
+  color: var(--text-primary);
+  background-color: #f3f4f6;
+}
+
+.tab-item.active {
+  color: var(--text-primary);
+  border-top-color: var(--text-primary);
+  background-color: #f9fafb;
+}
