@@ -7,11 +7,22 @@
   --text-muted: #6b7280;
   --border-color: #d1d5db;
   --border-focus: #1d4ed8;
-  --btn-primary-bg: #111827;
+  /* Button color variables */
+  --btn-primary-bg: #1e3a5f;
+  --btn-primary-hover-bg: #2c5282;
   --btn-primary-text: #ffffff;
-  --btn-secondary-bg: #ffffff;
-  --btn-secondary-text: #111827;
-  --btn-secondary-border: #111827;
+
+  --btn-add-color: #2e7d32;
+  --btn-add-hover-bg: #2e7d32;
+
+  --btn-secondary-color: #1f2937;
+  --btn-secondary-hover-bg: #1f2937;
+
+  --btn-danger-color: #c62828;
+  --btn-danger-hover-bg: #c62828;
+
+  --btn-disabled-text: #9ca3af;
+  --btn-disabled-border: #e5e7eb;
 
   /* Status chips (UX_SPEC.md §1) */
   --status-confirmed-bg: #e6f4ea;
@@ -35,6 +46,10 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 html {
@@ -100,8 +115,8 @@ textarea,
   border-radius: 6px;
   cursor: pointer;
   text-decoration: none;
-  border: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  border: 2px solid transparent;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
 .btn:focus-visible,
@@ -112,23 +127,103 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-.btn-primary {
+/* 1. Primary (.btn-primary): filled navy #1e3a5f, white text. Hover/active/focus-visible: #2c5282. */
+.btn-primary,
+.btn-primary:visited {
   background-color: var(--btn-primary-bg);
   color: var(--btn-primary-text);
+  border-color: var(--btn-primary-bg);
 }
 
-.btn-primary:hover {
-  background-color: #374151;
+.btn-primary:hover,
+.btn-primary:active,
+.btn-primary:focus-visible,
+.btn-primary:visited:hover,
+.btn-primary:visited:active {
+  background-color: var(--btn-primary-hover-bg);
+  border-color: var(--btn-primary-hover-bg);
+  color: #ffffff;
 }
 
-.btn-secondary {
-  background-color: var(--btn-secondary-bg);
-  color: var(--btn-secondary-text);
-  border: 2px solid var(--btn-secondary-border);
+/* 2. Add (.btn-add): green text #2e7d32, green border, transparent bg. Hover/active/focus-visible: filled #2e7d32 with white text. */
+.btn-add,
+.btn-add:visited {
+  background-color: transparent;
+  color: var(--btn-add-color);
+  border-color: var(--btn-add-color);
 }
 
-.btn-secondary:hover {
-  background-color: #f3f4f6;
+.btn-add:hover,
+.btn-add:active,
+.btn-add:focus-visible,
+.btn-add:visited:hover,
+.btn-add:visited:active {
+  background-color: var(--btn-add-hover-bg);
+  border-color: var(--btn-add-hover-bg);
+  color: #ffffff;
+}
+
+/* 3. Secondary (.btn-secondary): dark text #1f2937, dark border, transparent bg. Hover/active/focus-visible: filled #1f2937 with white text. */
+.btn-secondary,
+.btn-secondary:visited {
+  background-color: transparent;
+  color: var(--btn-secondary-color);
+  border-color: var(--btn-secondary-color);
+}
+
+.btn-secondary:hover,
+.btn-secondary:active,
+.btn-secondary:focus-visible,
+.btn-secondary:visited:hover,
+.btn-secondary:visited:active {
+  background-color: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-bg);
+  color: #ffffff;
+}
+
+/* 4. Danger (.btn-danger): red text #c62828, red border, transparent bg. Hover/active/focus-visible: filled #c62828 with white text. */
+.btn-danger,
+.btn-danger:visited {
+  background-color: transparent;
+  color: var(--btn-danger-color);
+  border-color: var(--btn-danger-color);
+}
+
+.btn-danger:hover,
+.btn-danger:active,
+.btn-danger:focus-visible,
+.btn-danger:visited:hover,
+.btn-danger:visited:active {
+  background-color: var(--btn-danger-hover-bg);
+  border-color: var(--btn-danger-hover-bg);
+  color: #ffffff;
+}
+
+/* Block buttons */
+.btn-block {
+  width: 100%;
+}
+
+/* Disabled buttons */
+.btn:disabled,
+button:disabled,
+.btn[disabled] {
+  background-color: transparent !important;
+  color: var(--btn-disabled-text) !important;
+  border-color: var(--btn-disabled-border) !important;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.btn:disabled:hover,
+.btn:disabled:active,
+.btn:disabled:focus-visible,
+button:disabled:hover,
+button:disabled:active,
+button:disabled:focus-visible {
+  background-color: transparent !important;
+  color: var(--btn-disabled-text) !important;
+  border-color: var(--btn-disabled-border) !important;
 }
 
 .text-input {
@@ -182,6 +277,31 @@ a:focus-visible {
   border: 1px solid var(--status-not-needed-border);
 }
 
+/* Water status chips per UX_SPEC.md §1 & Prompt B1 */
+.chip-water-confirmed {
+  background-color: var(--status-confirmed-bg);
+  color: var(--status-confirmed-text);
+  border: 1px solid var(--status-confirmed-border);
+}
+
+.chip-water-reported {
+  background-color: var(--status-planned-bg);
+  color: var(--status-planned-text);
+  border: 1px solid var(--status-planned-border);
+}
+
+.chip-water-unknown {
+  background-color: var(--status-unknown-bg);
+  color: var(--status-unknown-text);
+  border: 1px solid var(--status-unknown-border);
+}
+
+.chip-water-carrying {
+  background-color: var(--status-not-needed-bg);
+  color: var(--status-not-needed-text);
+  border: 1px solid var(--status-not-needed-border);
+}
+
 /* Home view styles */
 .home-header {
   display: flex;
@@ -221,7 +341,7 @@ a:focus-visible {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .form-label {
@@ -253,12 +373,14 @@ a:focus-visible {
 }
 
 .trek-card {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   background-color: var(--bg-surface);
   border: 2px solid var(--border-color);
   border-radius: 8px;
-  padding: 16px;
-  text-decoration: none;
+  padding: 14px 16px;
   color: inherit;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -268,16 +390,49 @@ a:focus-visible {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
+.trek-card-main {
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.trek-card-main:focus-visible {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.trek-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .trek-card-title {
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 0;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .trek-card-dates {
   font-size: 0.95rem;
   color: var(--text-secondary);
+}
+
+.trek-card-actions {
+  flex-shrink: 0;
+}
+
+.btn-card-delete {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Empty state */
@@ -367,9 +522,10 @@ a:focus-visible {
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.tab-item:hover {
+.tab-item:hover,
+.tab-item:active {
   color: var(--text-primary);
-  background-color: #f3f4f6;
+  background-color: #f1f5f9;
 }
 
 .tab-item.active {
@@ -377,3 +533,955 @@ a:focus-visible {
   border-top-color: var(--text-primary);
   background-color: #f9fafb;
 }
+
+.tab-item.active:hover,
+.tab-item.active:active {
+  background-color: #f9fafb;
+}
+
+/* Plan View Header & Save Status */
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.save-status {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #15803d;
+  background-color: #dcfce7;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid #16a34a;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.save-status.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.plan-trek-title {
+  margin-top: 4px;
+}
+
+/* Horizontal scrollable row of 8 section chips (UX_SPEC.md §2.2 & Part A) */
+.section-chips-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.section-chips-wrapper::before,
+.section-chips-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  width: 24px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  z-index: 2;
+}
+
+.section-chips-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-page), rgba(248, 249, 250, 0));
+}
+
+.section-chips-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-page), rgba(248, 249, 250, 0));
+}
+
+.section-chips-wrapper.fade-left::before {
+  opacity: 1;
+}
+
+.section-chips-wrapper.fade-right::after {
+  opacity: 1;
+}
+
+.section-chips-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 2px 14px 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.section-chips-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.section-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 2px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.section-chip:hover,
+.section-chip:active {
+  border-color: var(--text-primary);
+  background-color: #f1f5f9;
+}
+
+.section-chip.active {
+  background-color: var(--text-primary);
+  color: #ffffff;
+  border-color: var(--text-primary);
+}
+
+.section-chip.active:hover,
+.section-chip.active:active {
+  background-color: var(--text-primary);
+  color: #ffffff;
+  border-color: var(--text-primary);
+}
+
+.section-chip.complete:not(.active):hover,
+.section-chip.complete:not(.active):active {
+  background-color: #f1f5f9;
+}
+
+/* Active Section Card & Form Layout */
+.section-content-card {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group-section {
+  margin-top: 24px;
+}
+
+.form-group-section-first,
+.form-group + .form-group-section,
+.form-group-section:first-child {
+  margin-top: 8px;
+}
+
+.form-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.form-section-hint {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .form-row:not(.form-row-dates) {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Two date fields inside group: stacked below 400px, side by side when >= 400px */
+.form-row.form-row-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-row.form-row-dates > * {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (min-width: 400px) {
+  .form-row.form-row-dates {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .form-row.form-row-dates > .form-group {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .form-row.form-row-dates > .form-group > .text-input {
+    margin-top: auto;
+  }
+}
+
+.form-row-datetime {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row-datetime > .form-group-date {
+  flex: 1.4;
+  min-width: 0;
+}
+
+.form-row-datetime > .form-group-time {
+  flex: 1;
+  min-width: 0;
+}
+
+textarea.text-input {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+/* Checkbox label */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  cursor: pointer;
+}
+
+.stays-checkbox-group,
+.permits-checkbox-group {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Danger zone (A3) */
+.danger-zone {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Compact trash icon button (Part A & B) */
+.btn-icon-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--btn-danger-color);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.btn-icon-delete:hover,
+.btn-icon-delete:active {
+  background-color: #fdecea;
+  color: #8e1b1b;
+}
+
+.btn-icon-delete:focus-visible {
+  background-color: #fdecea;
+  color: #8e1b1b;
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.btn-icon-delete .icon-trash {
+  width: 18px;
+  height: 18px;
+  display: block;
+  transition: transform 150ms ease;
+}
+
+.btn-icon-delete:hover .icon-trash,
+.btn-icon-delete:active .icon-trash,
+.btn-icon-delete:focus-visible .icon-trash {
+  transform: scale(1.12);
+}
+
+/* Gear counter & packed status (B2) */
+.gear-counter-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: #f3f4f6;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.gear-packed-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.gear-packed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-radius: 4px;
+  user-select: none;
+}
+
+.gear-packed-label:hover {
+  background-color: #e5e7eb;
+}
+
+.gear-packed-cb,
+.food-packed-cb {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  cursor: pointer;
+}
+
+.card-packed .list-card-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+/* Safety section blocks (B4) */
+.safety-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-top: 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.safety-block:first-child {
+  margin-top: 8px;
+}
+
+.safety-subheading {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+/* Plan Back / Next navigation buttons */
+.plan-nav-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+.plan-nav-buttons .btn {
+  flex: 1;
+}
+
+/* Collapsible Card List Editor (UX_SPEC.md §2.2) */
+.list-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.list-editor-empty-hint {
+  padding: 16px;
+  background-color: #fefce8;
+  border: 1px dashed #ca8a04;
+  border-radius: 8px;
+  color: #854d0e;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.list-card {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.list-card:hover {
+  border-color: #9ca3af;
+}
+
+.list-card-header {
+  min-height: 48px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  background-color: #f9fafb;
+  cursor: pointer;
+  user-select: none;
+}
+
+.list-card-header.expanded {
+  border-bottom: 1px solid var(--border-color);
+  background-color: #f3f4f6;
+}
+
+.list-card-header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.list-card-toggle-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.list-card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.list-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.list-card-header-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 28px;
+  width: 100%;
+}
+
+.list-card-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.list-card-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.list-card-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.list-card-footer-buttons {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Travel groups (Part 3) */
+.travel-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.travel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.travel-group-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Status select dropdown with chip display */
+select.status-select {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+/* Home Card Header with Readiness Chip */
+.trek-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* Readiness Chips (UX_SPEC.md §1 & TECH_SPEC.md §4) */
+.chip-readiness-ready {
+  background-color: var(--status-confirmed-bg);
+  color: var(--status-confirmed-text);
+  border: 1px solid var(--status-confirmed-border);
+}
+
+.chip-readiness-warnings,
+.chip-readiness-ready_with_warnings {
+  background-color: var(--status-unknown-bg);
+  color: var(--status-unknown-text);
+  border: 1px solid var(--status-unknown-border);
+}
+
+.chip-readiness-not-ready,
+.chip-readiness-not_ready {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+/* Dashboard View Styles */
+.dashboard-trek-title {
+  margin-top: 4px;
+}
+
+.dashboard-trek-meta {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.dashboard-trekking-subdates {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.dashboard-metrics {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 480px) {
+  .dashboard-metrics {
+    flex-direction: column;
+  }
+}
+
+.metric-card {
+  flex: 1;
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 10px;
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: var(--text-primary);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.readiness-chip-row {
+  display: flex;
+  align-items: center;
+  margin: 2px 0;
+}
+
+.metric-value-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.dashboard-section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.empty-state-card {
+  background-color: var(--bg-surface);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+/* Issues List */
+.issues-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issue-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  min-height: 48px;
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.issue-card:hover,
+.issue-card:active {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.issue-card.issue-critical {
+  background-color: #fef2f2;
+  border: 2px solid #ef4444;
+  color: #991b1b;
+}
+
+.issue-card.issue-critical:hover,
+.issue-card.issue-critical:active {
+  background-color: #fee2e2;
+}
+
+.issue-card.issue-warning {
+  background-color: #fffbeb;
+  border: 2px solid #f59e0b;
+  color: #92400e;
+}
+
+.issue-card.issue-warning:hover,
+.issue-card.issue-warning:active {
+  background-color: #fef3c7;
+}
+
+.issue-icon {
+  font-weight: 700;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.issue-message {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.issue-arrow {
+  font-size: 1.2rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* Timeline Styles */
+.timeline-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.timeline-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-date-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.timeline-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-primary);
+  min-height: 48px;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.timeline-card:hover,
+.timeline-card:active {
+  border-color: var(--text-primary);
+  background-color: #f8fafc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.timeline-icon {
+  font-size: 1.35rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.timeline-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.timeline-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.timeline-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.timeline-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* Dashboard Footer Note */
+.dashboard-footer-note {
+  margin-top: 24px;
+  padding: 16px 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Settings View Styles (UX_SPEC.md §2.6) */
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.settings-card {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-help-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.settings-buttons-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-result-msg {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 10px 14px;
+  background-color: #f1f5f9;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.settings-result-msg.error {
+  color: #991b1b;
+  background-color: #fef2f2;
+  border-color: #ef4444;
+}
+
+.overview-export-zone {
+  margin-top: 14px;
+}
+
+/* Offline status banner (Part B) */
+.offline-banner {
+  background-color: #374151;
+  color: #f9fafb;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 8px 12px;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .btn-icon-delete .icon-trash,
+  .btn-icon-delete:hover .icon-trash,
+  .btn-icon-delete:active .icon-trash,
+  .btn-icon-delete:focus-visible .icon-trash {
+    transform: none !important;
+  }
+}
+
+
+

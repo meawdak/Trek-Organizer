@@ -1,36 +1,10 @@
 import { getTrek } from './store.js';
 import { escapeHtml } from './model.js';
 import { renderHome } from './views/home.js';
-
-const TABS = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'plan', label: 'Plan' },
-  { key: 'today', label: 'Today' },
-  { key: 'review', label: 'Review' },
-];
-
-// Renders the bottom navigation bar for a trek with four tabs.
-function renderBottomTabBar(trekId, activeTabKey) {
-  return `
-    <nav class="bottom-tab-bar" aria-label="Trek Navigation">
-      <div class="tab-bar-container">
-        ${TABS.map((tab) => {
-          const isActive = tab.key === activeTabKey;
-          const activeClass = isActive ? 'active' : '';
-          const ariaCurrent = isActive ? ' aria-current="page"' : '';
-          return `
-            <a
-              href="#/trek/${encodeURIComponent(trekId)}/${tab.key}"
-              class="tab-item ${activeClass}"${ariaCurrent}
-            >
-              ${tab.label}
-            </a>
-          `;
-        }).join('')}
-      </div>
-    </nav>
-  `;
-}
+import { renderPlan } from './views/plan.js';
+import { renderDashboard } from './views/dashboard.js';
+import { renderSettings } from './views/settings.js';
+import { TABS, renderBottomTabBar } from './ui.js';
 
 // Renders a placeholder view for a specific trek tab.
 function renderTrekPlaceholder(container, trekId, tabKey) {
@@ -119,14 +93,28 @@ export function router() {
   }
 
   if (hash === '#/settings') {
-    renderSettingsPlaceholder(appContainer);
+    renderSettings(appContainer);
     return;
   }
 
-  const trekMatch = hash.match(/^#\/trek\/([^/]+)\/(dashboard|plan|today|review)$/);
+  const trekMatch = hash.match(/^#\/trek\/([^/?#]+)\/(dashboard|plan|today|review)(?:\?([^#]*))?$/);
   if (trekMatch) {
     const trekId = decodeURIComponent(trekMatch[1]);
     const tabKey = trekMatch[2];
+    const queryStr = trekMatch[3] || '';
+    const searchParams = new URLSearchParams(queryStr);
+
+    if (tabKey === 'plan') {
+      const sectionKey = searchParams.get('s') || 'overview';
+      renderPlan(appContainer, trekId, sectionKey);
+      return;
+    }
+
+    if (tabKey === 'dashboard') {
+      renderDashboard(appContainer, trekId);
+      return;
+    }
+
     renderTrekPlaceholder(appContainer, trekId, tabKey);
     return;
   }
@@ -134,8 +122,37 @@ export function router() {
   renderNotFound(appContainer);
 }
 
+// Registers the service worker for offline PWA capabilities.
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch((err) => {
+        console.error('Service worker registration failed:', err);
+      });
+    });
+  }
+}
+
+// Monitors online/offline network connectivity and toggles the top banner.
+function initOfflineIndicator() {
+  const banner = document.getElementById('offline-banner');
+  if (!banner) return;
+
+  const updateStatus = () => {
+    const isOffline = !navigator.onLine;
+    banner.hidden = !isOffline;
+  };
+
+  window.addEventListener('online', updateStatus);
+  window.addEventListener('offline', updateStatus);
+  updateStatus();
+}
+
 // Initializes the application router and event listeners.
 export function initApp() {
+  registerServiceWorker();
+  initOfflineIndicator();
+
   window.addEventListener('hashchange', router);
   window.addEventListener('DOMContentLoaded', router);
 
@@ -146,3 +163,4 @@ export function initApp() {
 }
 
 initApp();
+

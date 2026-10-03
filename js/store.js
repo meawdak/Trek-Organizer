@@ -1,3 +1,5 @@
+import { normalizeTrek } from './model.js';
+
 export const STORAGE_KEY = 'trekOrganizer.v1';
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -29,7 +31,7 @@ export function loadStore() {
     return {
       schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 1,
       settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
-      treks: parsed.treks,
+      treks: parsed.treks.map(normalizeTrek),
     };
   } catch (err) {
     console.error('Failed to load store from localStorage:', err);
@@ -102,3 +104,63 @@ export function saveSettings(settings) {
   saveStore(store);
   return store.settings;
 }
+
+// Exports all treks in the store minus settings, matching the backup schema.
+export function exportData() {
+  const store = loadStore();
+  return {
+    schemaVersion: store.schemaVersion || 1,
+    exportedAt: new Date().toISOString(),
+    treks: store.treks.map(normalizeTrek),
+  };
+}
+
+// Imports treks from backup data with validation, normalization, and conflict resolution.
+export function importData(data, { onConflict } = {}) {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    typeof data.schemaVersion !== 'number' ||
+    !Array.isArray(data.treks)
+  ) {
+    throw new Error('Invalid backup data structure.');
+  }
+
+  const allValidTrekObjects = data.treks.every(
+    (t) => t && typeof t === 'object' && typeof t.id === 'string' && t.id.length > 0
+  );
+  if (!allValidTrekObjects) {
+    throw new Error('Invalid treks array in backup data.');
+  }
+
+  const store = loadStore();
+  let added = 0;
+  let replaced = 0;
+  let skipped = 0;
+
+  for (const rawTrek of data.treks) {
+    const trek = normalizeTrek(rawTrek);
+    const existingIndex = store.treks.findIndex((t) => t.id === trek.id);
+
+    if (existingIndex >= 0) {
+      const existingTrek = store.treks[existingIndex];
+      const decision = onConflict ? onConflict(existingTrek) : 'replace';
+      if (decision === 'replace') {
+        store.treks[existingIndex] = trek;
+        replaced++;
+      } else {
+        skipped++;
+      }
+    } else {
+      store.treks.push(trek);
+      added++;
+    }
+  }
+
+  if (added > 0 || replaced > 0) {
+    saveStore(store);
+  }
+
+  return { added, replaced, skipped };
+}
+

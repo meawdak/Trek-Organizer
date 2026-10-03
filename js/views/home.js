@@ -1,13 +1,22 @@
 import { createEmptyTrek, escapeHtml } from '../model.js';
-import { getTreks, saveTrek } from '../store.js';
+import { getTreks, saveTrek, deleteTrek } from '../store.js';
+import { formatDate, renderReadinessChip, TRASH_ICON_SVG } from '../ui.js';
+import { runChecks } from '../checks.js';
 
-// Formats the start and end dates or returns "Dates not set".
+// Formats the display dates for a trek: trip dates if both are set, otherwise trekking dates.
 function formatTrekDates(overview) {
-  if (overview.startDate && overview.endDate) {
-    return `${overview.startDate} – ${overview.endDate}`;
+  const tripStart = formatDate(overview?.tripStartDate);
+  const tripEnd = formatDate(overview?.tripEndDate);
+  if (tripStart && tripEnd) {
+    return `${tripStart} – ${tripEnd}`;
   }
-  if (overview.startDate) {
-    return `${overview.startDate} – (end date not set)`;
+  const formattedStart = formatDate(overview?.startDate);
+  const formattedEnd = formatDate(overview?.endDate);
+  if (formattedStart && formattedEnd) {
+    return `${formattedStart} – ${formattedEnd}`;
+  }
+  if (formattedStart) {
+    return `${formattedStart} – (end date not set)`;
   }
   return 'Dates not set';
 }
@@ -25,11 +34,28 @@ export function renderHome(container) {
            .map((trek) => {
              const dates = formatTrekDates(trek.overview);
              const name = trek.overview.name || 'Untitled Trek';
+             const checkResults = runChecks(trek);
              return `
-               <a href="#/trek/${trek.id}/dashboard" class="trek-card" role="listitem">
-                 <h2 class="trek-card-title">${escapeHtml(name)}</h2>
-                 <p class="trek-card-dates">${escapeHtml(dates)}</p>
-               </a>
+               <div class="trek-card" role="listitem">
+                 <a href="#/trek/${encodeURIComponent(trek.id)}/dashboard" class="trek-card-main">
+                   <div class="trek-card-header">
+                     <h2 class="trek-card-title">${escapeHtml(name)}</h2>
+                     ${renderReadinessChip(checkResults.readiness)}
+                   </div>
+                   <p class="trek-card-dates">${escapeHtml(dates)}</p>
+                 </a>
+                 <div class="trek-card-actions">
+                   <button
+                     type="button"
+                     class="btn-icon-delete btn-card-delete"
+                     data-trek-id="${escapeHtml(trek.id)}"
+                     data-trek-name="${escapeHtml(name)}"
+                     aria-label="Delete trek &quot;${escapeHtml(name)}&quot;"
+                   >
+                     ${TRASH_ICON_SVG}
+                   </button>
+                 </div>
+               </div>
              `;
            })
            .join('')}
@@ -42,7 +68,7 @@ export function renderHome(container) {
     </header>
 
     <div class="home-actions">
-      <button type="button" id="btn-show-new-trek" class="btn btn-primary btn-block">+ New trek</button>
+      <button type="button" id="btn-show-new-trek" class="btn btn-add btn-block">+ New trek</button>
 
       <form id="form-new-trek" class="inline-form" hidden>
         <label for="trek-name-input" class="form-label">Trek name</label>
@@ -109,4 +135,23 @@ export function renderHome(container) {
       errorElement.hidden = false;
     }
   });
+
+  // Handle Delete trek button on cards (A4)
+  container.querySelectorAll('.btn-card-delete').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const trekId = btn.getAttribute('data-trek-id');
+      const trekName = btn.getAttribute('data-trek-name') || 'Untitled Trek';
+      if (
+        window.confirm(
+          `Delete "${trekName}"? This cannot be undone. Export a backup first if you might need it.`
+        )
+      ) {
+        deleteTrek(trekId);
+        renderHome(container);
+      }
+    });
+  });
 }
+
