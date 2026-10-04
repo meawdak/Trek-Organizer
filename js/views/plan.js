@@ -1254,13 +1254,17 @@ function renderGearSection(container, trek, onSave) {
       const secTotal = items.length;
       const isOpen = openSections.has(catKey);
       const countText = secTotal > 0 ? `(${secPacked}/${secTotal})` : '(0)';
-      const hasWarning = items.some((g) => g.source === SOURCES.BORROW || g.source === SOURCES.BUY || !g.packed);
+      const unacquiredItems = items.filter((g) => !g.packed && (g.source === SOURCES.BORROW || g.source === SOURCES.BUY));
+      const hasWarning = unacquiredItems.length > 0;
+      const unacquiredCount = unacquiredItems.length;
+      const warningTooltip = `${unacquiredCount} ${unacquiredCount === 1 ? 'item' : 'items'} still to buy or borrow`;
 
       const sectionGroup = createCollapsibleSectionGroup({
         key: catKey,
         title: catLabel,
         countText,
         hasWarning,
+        warningTooltip,
         isOpen,
         addLabel: '+ Add',
         onToggle: () => {
