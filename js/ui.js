@@ -176,7 +176,7 @@ export const TABS = Object.freeze([
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'plan', label: 'Plan' },
   { key: 'today', label: 'Today' },
-  { key: 'review', label: 'Review' },
+  { key: 'review', label: 'Gemma' },
 ]);
 
 // Renders the bottom navigation tab bar for trek pages with four tabs: Dashboard, Plan, Today, Review.

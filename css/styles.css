@@ -1809,6 +1809,86 @@ select.status-select {
   font-style: italic;
 }
 
+.review-old-version-advisory {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.review-action-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+@media (min-width: 600px) {
+  .review-action-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+}
+
+.review-item-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex: 1;
+}
+
+.review-gear-gap-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-gear-gap-item {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.review-gear-gap-reason {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.review-question-text {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.review-item-action {
+  flex-shrink: 0;
+}
+
+.review-item-action .btn {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 600px) {
+  .review-item-action .btn {
+    width: auto;
+  }
+}
+
 /* ─── Safety Section Redesign (Part A & D2) ─── */
 .safety-hint {
   font-size: 0.875rem;

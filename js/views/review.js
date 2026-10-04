@@ -2,7 +2,7 @@ import { getTrek, getSettings, loadStore, saveStore, saveTrek } from '../store.j
 import { escapeHtml } from '../model.js';
 import { renderBottomTabBar } from '../ui.js';
 import { runChecks } from '../checks.js';
-import { checkOllama, reviewPlan } from '../ai.js';
+import { checkOllama, reviewPlan, buildGearCheckTitle, normalizeText } from '../ai.js';
 
 // Formats an ISO timestamp to local readable DD/MM/YYYY, HH:mm format.
 function formatReviewTimestamp(isoStr) {
@@ -15,6 +15,41 @@ function formatReviewTimestamp(isoStr) {
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   return `${day}/${month}/${year}, ${hours}:${minutes}`;
+}
+
+// Appends a question to overview.notes under "Questions to answer:" heading, creating the heading if not present.
+export function appendQuestionToNotes(existingNotes = '', question = '') {
+  const qText = (question || '').trim();
+  if (!qText) return existingNotes || '';
+  const qLine = `- ${qText}`;
+  const existing = (existingNotes || '').trim();
+
+  if (!existing) {
+    return `Questions to answer:\n${qLine}`;
+  }
+
+  const heading = 'Questions to answer:';
+  const headingLower = heading.toLowerCase();
+  const existingLower = existing.toLowerCase();
+
+  const headingIndex = existingLower.indexOf(headingLower);
+  if (headingIndex === -1) {
+    return `${existing}\n\n${heading}\n${qLine}`;
+  }
+
+  // If question is already present in notes, avoid duplicate appending
+  if (existing.includes(qText)) {
+    return existing;
+  }
+
+  const afterHeading = existing.slice(headingIndex + heading.length);
+  const nextSectionIndex = afterHeading.indexOf('\n\n');
+  if (nextSectionIndex !== -1) {
+    const insertPos = headingIndex + heading.length + nextSectionIndex;
+    return `${existing.slice(0, insertPos)}\n${qLine}${existing.slice(insertPos)}`;
+  }
+
+  return `${existing}\n${qLine}`;
 }
 
 // Renders the review screen with Gemma AI plan evaluation and local Ollama status checks.
@@ -56,19 +91,30 @@ export function renderReview(container, trekId) {
 
     let resultsHtml = '';
     if (aiReview && aiReview.result) {
-      if (aiReview.result.raw) {
+      const res = aiReview.result;
+      const isOldReview = Boolean(
+        !Array.isArray(res.gear_gaps) &&
+        !Array.isArray(res.questions) &&
+        (Array.isArray(res.missing) || Array.isArray(res.unclear) || Array.isArray(res.consider))
+      );
+
+      if (isOldReview) {
+        resultsHtml = `
+          <div class="review-old-version-advisory" role="status">
+            <p>This review was made with an older version. Run it again.</p>
+          </div>
+        `;
+      } else if (res.raw) {
         resultsHtml = `
           <section class="review-group-card" aria-labelledby="heading-gemma-notes">
             <h2 id="heading-gemma-notes" class="review-group-title">Gemma's notes</h2>
-            <pre class="review-raw-notes">${escapeHtml(aiReview.result.raw)}</pre>
+            <pre class="review-raw-notes">${escapeHtml(res.raw)}</pre>
           </section>
         `;
       } else {
-        const missingItems = aiReview.result.missing || [];
-        const unclearItems = aiReview.result.unclear || [];
-        const considerItems = aiReview.result.consider || [];
-
-        const isAllEmpty = missingItems.length === 0 && unclearItems.length === 0 && considerItems.length === 0;
+        const gearGaps = Array.isArray(res.gear_gaps) ? res.gear_gaps : [];
+        const questions = Array.isArray(res.questions) ? res.questions : [];
+        const isAllEmpty = gearGaps.length === 0 && questions.length === 0;
 
         if (isAllEmpty) {
           resultsHtml = `
@@ -77,41 +123,97 @@ export function renderReview(container, trekId) {
             </div>
           `;
         } else {
-          const groups = [
-            { key: 'missing', title: 'Missing', items: missingItems },
-            { key: 'unclear', title: 'Unclear or contradictory', items: unclearItems },
-            { key: 'consider', title: 'Worth considering', items: considerItems },
-          ];
+          const card1Title = buildGearCheckTitle(currentTrek);
+
+          const existingGearNames = (currentTrek.gear || []).map((g) =>
+            normalizeText(g?.item || '')
+          );
+          const existingNotes = currentTrek.overview?.notes || '';
+
+          const card1Html = `
+            <section class="review-group-card" aria-labelledby="heading-gear-gaps">
+              <h2 id="heading-gear-gaps" class="review-group-title">${escapeHtml(card1Title)}</h2>
+              ${
+                gearGaps.length > 0
+                  ? `
+                <ul class="review-items-list">
+                  ${gearGaps
+                    .map((gap, idx) => {
+                      const itemNorm = normalizeText(gap.item || '');
+                      const isAdded = existingGearNames.includes(itemNorm);
+                      return `
+                    <li class="review-action-item">
+                      <div class="review-item-main">
+                        <span class="chip-suggestion">Suggestion — check this yourself</span>
+                        <div class="review-gear-gap-content">
+                          <strong class="review-gear-gap-item">${escapeHtml(gap.item)}</strong>
+                          ${gap.reason ? `<span class="review-gear-gap-reason">${escapeHtml(gap.reason)}</span>` : ''}
+                        </div>
+                      </div>
+                      <div class="review-item-action">
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-review-add-gear"
+                          data-index="${idx}"
+                          data-item="${escapeHtml(gap.item)}"
+                          ${isAdded ? 'disabled' : ''}
+                        >
+                          ${isAdded ? 'Added ✓' : 'Add to Gear'}
+                        </button>
+                      </div>
+                    </li>
+                  `;
+                    })
+                    .join('')}
+                </ul>
+              `
+                  : '<p class="review-empty-group">Nothing to add here.</p>'
+              }
+            </section>
+          `;
+
+          const card2Html = `
+            <section class="review-group-card" aria-labelledby="heading-questions">
+              <h2 id="heading-questions" class="review-group-title">Questions worth answering</h2>
+              ${
+                questions.length > 0
+                  ? `
+                <ul class="review-items-list">
+                  ${questions
+                    .map((q, idx) => {
+                      const isAdded = existingNotes.includes(q.trim());
+                      return `
+                    <li class="review-action-item">
+                      <div class="review-item-main">
+                        <span class="chip-suggestion">Suggestion — check this yourself</span>
+                        <div class="review-question-text">${escapeHtml(q)}</div>
+                      </div>
+                      <div class="review-item-action">
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-review-add-note"
+                          data-index="${idx}"
+                          data-question="${escapeHtml(q)}"
+                          ${isAdded ? 'disabled' : ''}
+                        >
+                          ${isAdded ? 'Added ✓' : 'Add to my notes'}
+                        </button>
+                      </div>
+                    </li>
+                  `;
+                    })
+                    .join('')}
+                </ul>
+              `
+                  : '<p class="review-empty-group">Nothing to add here.</p>'
+              }
+            </section>
+          `;
 
           resultsHtml = `
             <div class="review-groups-container">
-              ${groups
-                .map(
-                  (g) => `
-                  <section class="review-group-card" aria-labelledby="heading-review-${g.key}">
-                    <h2 id="heading-review-${g.key}" class="review-group-title">${escapeHtml(g.title)}</h2>
-                    ${
-                      g.items.length > 0
-                        ? `
-                      <ul class="review-items-list">
-                        ${g.items
-                          .map(
-                            (item) => `
-                          <li class="review-item">
-                            <span class="chip-suggestion">Suggestion — check this yourself</span>
-                            <span class="review-item-text">${escapeHtml(item)}</span>
-                          </li>
-                        `
-                          )
-                          .join('')}
-                      </ul>
-                    `
-                        : '<p class="review-empty-group">Nothing here.</p>'
-                    }
-                  </section>
-                `
-                )
-                .join('')}
+              ${card1Html}
+              ${card2Html}
             </div>
             ${
               aiReview.droppedCount > 0
@@ -126,8 +228,8 @@ export function renderReview(container, trekId) {
     container.innerHTML = `
       <div class="page-container review-page">
         <header class="page-header">
-          <a href="#/" class="back-link">← Treks</a>
-          <h1>${escapeHtml(trekName)}</h1>
+          <a href="#/trek/${encodeURIComponent(trek.id)}/dashboard" class="back-link">← ${escapeHtml(trekName)}</a>
+          <h1 class="page-title">Gemma — plan check</h1>
         </header>
 
         <p class="review-intro">Gemma runs on this laptop through Ollama. Your plan is not sent to the internet.</p>
@@ -185,6 +287,77 @@ export function renderReview(container, trekId) {
     const runningArea = container.querySelector('#review-running-area');
     const runningText = container.querySelector('#review-running-text');
     const statusMsg = container.querySelector('#review-status-msg');
+
+    // Wire "Add to Gear" buttons
+    const addGearBtns = container.querySelectorAll('.btn-review-add-gear');
+    addGearBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const itemName = btn.getAttribute('data-item');
+        if (!itemName) return;
+        const currentTrek = getTrek(trekId);
+        if (!currentTrek) return;
+
+        if (!Array.isArray(currentTrek.gear)) {
+          currentTrek.gear = [];
+        }
+
+        currentTrek.gear.push({
+          id: crypto.randomUUID(),
+          item: itemName,
+          category: 'gemma',
+          source: 'buy',
+          packed: false,
+        });
+
+        const savedTrek = saveTrek(currentTrek);
+        if (savedTrek.aiReview) {
+          savedTrek.aiReview.at = savedTrek.updatedAt;
+          const store = loadStore();
+          const tIdx = store.treks.findIndex((t) => t.id === savedTrek.id);
+          if (tIdx >= 0) {
+            store.treks[tIdx].aiReview.at = savedTrek.updatedAt;
+            saveStore(store);
+          }
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Added ✓';
+      });
+    });
+
+    // Wire "Add to my notes" buttons
+    const addNoteBtns = container.querySelectorAll('.btn-review-add-note');
+    addNoteBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const questionText = btn.getAttribute('data-question');
+        if (!questionText) return;
+        const currentTrek = getTrek(trekId);
+        if (!currentTrek) return;
+
+        if (!currentTrek.overview) {
+          currentTrek.overview = {};
+        }
+
+        currentTrek.overview.notes = appendQuestionToNotes(
+          currentTrek.overview.notes,
+          questionText
+        );
+
+        const savedTrek = saveTrek(currentTrek);
+        if (savedTrek.aiReview) {
+          savedTrek.aiReview.at = savedTrek.updatedAt;
+          const store = loadStore();
+          const tIdx = store.treks.findIndex((t) => t.id === savedTrek.id);
+          if (tIdx >= 0) {
+            store.treks[tIdx].aiReview.at = savedTrek.updatedAt;
+            saveStore(store);
+          }
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Added ✓';
+      });
+    });
 
     if (btnCancel) {
       btnCancel.addEventListener('click', () => {

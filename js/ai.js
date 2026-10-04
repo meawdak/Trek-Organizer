@@ -1,15 +1,12 @@
 import { formatDate, formatDateTime } from './ui.js';
 import { STAY_TYPE_LABELS, GEAR_CATEGORIES } from './model.js';
 
-export const SYSTEM_PROMPT = `You check a trek plan written by a trekker. You do NOT plan the trek and you do NOT invent facts.
-Write short, complete sentences (8 to 25 words). Each sentence must say WHAT is missing or unclear and WHERE in the plan.
-- missing: important information the plan does not include (for example documents, emergency details, gear for the conditions, food for all days).
-- unclear: details in the plan that contradict each other or are too vague to act on.
-- consider: sensible things a careful trekker might add or double-check.
-Rules: never invent distances, altitudes, water sources, permits, transport, stays or phone numbers. Never say the trek is safe. No medical advice. Do not repeat items from rule_check_results. Do not copy plan text without explaining the problem. Each sentence may appear in only one group.
-Example of the format (do not copy these sentences):
-{"missing": ["The gear list has no rain jacket even though the trek is in a month with possible rain."], "unclear": ["Day 3 ends at a different place than where Day 4 starts."], "consider": ["Consider noting where the last mobile network signal is on the route."]}
-Return ONLY JSON with the keys missing, unclear, consider. Use at most 4 sentences per key. Use an empty list if you have nothing useful.`;
+export const SYSTEM_PROMPT = `You help a self-supported trekker check their own plan. You do NOT plan the trek and you do NOT invent facts about the route, water, permits, transport, stays or phone numbers.
+Task 1 — gear_gaps: compare the gear list with the trek conditions (month, altitude, number of days, camping or not). List gear or clothing that is clearly expected for these conditions but missing from the list. Never suggest medicines or drugs. Never suggest an item that is already in the gear list.
+Task 2 — questions: ask short questions the trekker should be able to answer before leaving, about backup plans and decisions (for example what to do if transport fails, weather turns bad, or a campsite is unusable). Each question must end with a question mark and refer to something specific in the plan.
+Return ONLY JSON:
+{"gear_gaps": [{"item": "short item name", "reason": "one sentence linking it to the conditions"}], "questions": ["question?"]}
+At most 5 gear_gaps and 5 questions. Use empty lists if nothing is useful.`;
 
 // Builds a compact plain-text summary of filled-in plan fields grouped by section.
 export function buildPlanSummary(trek) {
@@ -262,6 +259,143 @@ export function buildPlanSummary(trek) {
   return sections.join('\n\n');
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Extracts and formats month or month range (e.g. "November" or "October–November") from ISO date strings.
+export function formatMonths(startDateStr, endDateStr) {
+  if (!startDateStr && !endDateStr) return '';
+  const getMonthName = (dStr) => {
+    if (!dStr) return '';
+    const parts = dStr.split('-');
+    if (parts.length >= 2) {
+      const m = parseInt(parts[1], 10);
+      return MONTH_NAMES[m - 1] || '';
+    }
+    return '';
+  };
+  const m1 = getMonthName(startDateStr);
+  const m2 = getMonthName(endDateStr);
+  if (m1 && m2) {
+    return m1 === m2 ? m1 : `${m1}–${m2}`;
+  }
+  return m1 || m2;
+}
+
+// Builds the Card 1 title from trek conditions, e.g. "Gear check — November, up to 3,600 m, own tent".
+export function buildGearCheckTitle(trek) {
+  if (!trek || typeof trek !== 'object') return 'Gear check';
+  const parts = [];
+  const months =
+    formatMonths(trek.overview?.startDate, trek.overview?.endDate) ||
+    formatMonths(trek.overview?.tripStartDate, trek.overview?.tripEndDate);
+  if (months) parts.push(months);
+
+  if (trek.overview?.maxAltitudeM) {
+    const formattedAlt = Number(trek.overview.maxAltitudeM).toLocaleString();
+    parts.push(`up to ${formattedAlt} m`);
+  }
+
+  const staySet = new Set((trek.days || []).map((d) => d.stayType).filter(Boolean));
+  if (staySet.has('camping_own_tent')) {
+    parts.push('own tent');
+  } else if (staySet.has('homestay')) {
+    parts.push('homestay');
+  } else if (staySet.has('camping_booked') || staySet.has('booked_camp')) {
+    parts.push('camps');
+  } else if (staySet.has('lodge') || staySet.has('hut')) {
+    parts.push('lodge');
+  }
+
+  if (parts.length > 0) {
+    return `Gear check — ${parts.join(', ')}`;
+  }
+  return 'Gear check';
+}
+
+// Builds a short text block summarizing conditions, gear, food count, and essentials for Gemma review.
+export function buildConditions(trek) {
+  if (!trek || typeof trek !== 'object') return '';
+
+  const months =
+    formatMonths(trek.overview?.startDate, trek.overview?.endDate) ||
+    formatMonths(trek.overview?.tripStartDate, trek.overview?.tripEndDate) ||
+    'not set';
+
+  const numDays = Array.isArray(trek.days) ? trek.days.length : 0;
+  const maxAlt = trek.overview?.maxAltitudeM ? `max altitude: ${Number(trek.overview.maxAltitudeM).toLocaleString()} m` : null;
+  const groupSize = trek.overview?.groupSize ? `group size: ${trek.overview.groupSize}` : null;
+
+  const stayCounts = {};
+  (trek.days || []).forEach((d) => {
+    const st = d.stayType || 'other';
+    stayCounts[st] = (stayCounts[st] || 0) + 1;
+  });
+  const STAY_FRIENDLY_NAMES = {
+    camping_own_tent: 'own tent',
+    camping_booked: 'booked tent',
+    homestay: 'homestay',
+    hut: 'hut',
+    lodge: 'lodge',
+    booked_camp: 'booked camp',
+    other: 'other stay',
+  };
+  const stayParts = Object.entries(stayCounts).map(([st, cnt]) => {
+    const name = STAY_FRIENDLY_NAMES[st] || STAY_TYPE_LABELS[st] || st;
+    return `${name} on ${cnt} night${cnt === 1 ? '' : 's'}`;
+  });
+  const staySummary = stayParts.length > 0 ? stayParts.join(', ') : 'none recorded';
+
+  const diff = trek.overview?.difficulty && trek.overview.difficulty !== 'not_sure'
+    ? `difficulty: ${trek.overview.difficulty}`
+    : null;
+
+  const condParts = [
+    `Month(s): ${months}`,
+    `Trekking days: ${numDays}`,
+    maxAlt,
+    groupSize,
+    `Stays: ${staySummary}`,
+    diff,
+  ].filter(Boolean);
+
+  const gearLines = Array.isArray(trek.gear) && trek.gear.length > 0
+    ? trek.gear.map((g) => {
+        const name = g.item?.trim() || 'Untitled';
+        const catLabel = GEAR_CATEGORIES[g.category] || g.category || 'Other';
+        return `- ${name} (${catLabel})`;
+      })
+    : ['none recorded'];
+
+  const foodCount = Array.isArray(trek.food?.items) ? trek.food.items.length : 0;
+
+  const ESSENTIAL_LABELS = {
+    firstAid: 'First-aid kit',
+    medicines: 'Personal medicines',
+    headlamp: 'Headlamp',
+    powerBank: 'Power bank',
+    offlineMap: 'Offline map',
+    whistle: 'Whistle',
+  };
+  const tickedEssentials = Object.entries(trek.safety?.essentials || {})
+    .filter(([_, val]) => Boolean(val))
+    .map(([k]) => ESSENTIAL_LABELS[k] || k);
+  const essentialsText = tickedEssentials.length > 0 ? tickedEssentials.join(', ') : 'none marked';
+
+  return [
+    'Trek conditions:',
+    condParts.map((c) => `- ${c}`).join('\n'),
+    '',
+    'Gear list:',
+    gearLines.join('\n'),
+    '',
+    `Food item count: ${foodCount}`,
+    `Carrying essentials: ${essentialsText}`,
+  ].join('\n');
+}
+
 // Checks if Ollama is reachable and whether the configured model is installed.
 export async function checkOllama(settings) {
   const ollamaUrl = (settings?.ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
@@ -314,14 +448,10 @@ export function normalizeText(str) {
     .trim();
 }
 
-const PROMPT_EXAMPLE_SENTENCES = [
-  'The gear list has no rain jacket even though the trek is in a month with possible rain.',
-  'Day 3 ends at a different place than where Day 4 starts.',
-  'Consider noting where the last mobile network signal is on the route.',
-].map(normalizeText);
+const MEDICINE_REGEX = /\b(medicines?|medications?|tablets?|pills?|drugs?|doses?|capsules?)\b/i;
 
-// Filters raw Gemma suggestions: drops <6 words, prompt examples, copied plan text, cross-group duplicates, max 4 per group.
-export function filterSuggestions(parsed, planSummary) {
+// Filters raw Gemma review output: validates gear_gaps and questions, drops invalid/medicine/duplicate/copied items.
+export function filterSuggestions(parsed, trek, planSummary, conditions) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return {
       result: { raw: typeof parsed === 'string' ? parsed : '' },
@@ -329,74 +459,140 @@ export function filterSuggestions(parsed, planSummary) {
     };
   }
 
-  const normalizedSummary = normalizeText(planSummary);
-  const groups = ['missing', 'unclear', 'consider'];
-  const filteredResult = {
-    missing: [],
-    unclear: [],
-    consider: [],
-  };
-  const seenItems = new Set();
   let droppedCount = 0;
+  const filteredGaps = [];
+  const seenGaps = new Set();
 
-  for (const groupKey of groups) {
-    const rawItems = Array.isArray(parsed[groupKey]) ? parsed[groupKey] : [];
-    for (const rawItem of rawItems) {
-      if (typeof rawItem !== 'string') {
-        droppedCount++;
-        continue;
-      }
+  const existingGearNames = Array.isArray(trek?.gear)
+    ? trek.gear.map((g) => (g.item || '').trim().toLowerCase()).filter(Boolean)
+    : [];
 
-      const trimmed = rawItem.trim();
-      if (!trimmed) {
-        droppedCount++;
-        continue;
-      }
-
-      // 1. Drop items with fewer than 6 words
-      const words = trimmed.split(/\s+/).filter(Boolean);
-      if (words.length < 6) {
-        droppedCount++;
-        continue;
-      }
-
-      const norm = normalizeText(trimmed);
-      if (!norm) {
-        droppedCount++;
-        continue;
-      }
-
-      // 2. Drop items identical (case-insensitive, ignoring punctuation) to any of the 3 prompt examples
-      if (PROMPT_EXAMPLE_SENTENCES.includes(norm)) {
-        droppedCount++;
-        continue;
-      }
-
-      // 3. Drop items that are just copied plan text
-      if (normalizedSummary.includes(norm)) {
-        droppedCount++;
-        continue;
-      }
-
-      // 4. Drop duplicates across groups (and within group)
-      if (seenItems.has(norm)) {
-        droppedCount++;
-        continue;
-      }
-
-      // 5. Max 4 per group
-      if (filteredResult[groupKey].length >= 4) {
-        droppedCount++;
-        continue;
-      }
-
-      seenItems.add(norm);
-      filteredResult[groupKey].push(trimmed);
+  const rawGaps = Array.isArray(parsed.gear_gaps) ? parsed.gear_gaps : [];
+  for (const gap of rawGaps) {
+    if (!gap || typeof gap !== 'object' || Array.isArray(gap)) {
+      droppedCount++;
+      continue;
     }
+
+    const item = typeof gap.item === 'string' ? gap.item.trim() : '';
+    const reason = typeof gap.reason === 'string' ? gap.reason.trim() : '';
+
+    if (!item || !reason) {
+      droppedCount++;
+      continue;
+    }
+
+    // item must be 1–5 words
+    const itemWords = item.split(/\s+/).filter(Boolean);
+    if (itemWords.length < 1 || itemWords.length > 5) {
+      droppedCount++;
+      continue;
+    }
+
+    // reason must be 6–30 words
+    const reasonWords = reason.split(/\s+/).filter(Boolean);
+    if (reasonWords.length < 6 || reasonWords.length > 30) {
+      droppedCount++;
+      continue;
+    }
+
+    const itemLower = item.toLowerCase();
+
+    // Drop if name matches an existing gear item (case-insensitive; either name contains the other)
+    const matchesExisting = existingGearNames.some(
+      (ext) => itemLower.includes(ext) || ext.includes(itemLower)
+    );
+    if (matchesExisting) {
+      droppedCount++;
+      continue;
+    }
+
+    // Drop if item or reason mentions medicine, medication, tablet, pill, drug, dose or capsule
+    if (MEDICINE_REGEX.test(item) || MEDICINE_REGEX.test(reason)) {
+      droppedCount++;
+      continue;
+    }
+
+    // Drop duplicates
+    if (seenGaps.has(itemLower)) {
+      droppedCount++;
+      continue;
+    }
+
+    // Max 5 gear_gaps
+    if (filteredGaps.length >= 5) {
+      droppedCount++;
+      continue;
+    }
+
+    seenGaps.add(itemLower);
+    filteredGaps.push({ item, reason });
+  }
+
+  // Questions
+  const filteredQuestions = [];
+  const seenQuestions = new Set();
+  const normalizedTextPool = normalizeText(`${planSummary || ''} ${conditions || ''}`);
+
+  const rawQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
+  for (const q of rawQuestions) {
+    if (typeof q !== 'string') {
+      droppedCount++;
+      continue;
+    }
+
+    const trimmed = q.trim();
+    if (!trimmed) {
+      droppedCount++;
+      continue;
+    }
+
+    // Must end with ?
+    if (!trimmed.endsWith('?')) {
+      droppedCount++;
+      continue;
+    }
+
+    // 6–30 words
+    const qWords = trimmed.split(/\s+/).filter(Boolean);
+    if (qWords.length < 6 || qWords.length > 30) {
+      droppedCount++;
+      continue;
+    }
+
+    const normQ = normalizeText(trimmed);
+    if (!normQ) {
+      droppedCount++;
+      continue;
+    }
+
+    // Drop duplicates
+    if (seenQuestions.has(normQ)) {
+      droppedCount++;
+      continue;
+    }
+
+    // Drop any that just copy plan text
+    if (normalizedTextPool && normalizedTextPool.includes(normQ)) {
+      droppedCount++;
+      continue;
+    }
+
+    // Max 5 questions
+    if (filteredQuestions.length >= 5) {
+      droppedCount++;
+      continue;
+    }
+
+    seenQuestions.add(normQ);
+    filteredQuestions.push(trimmed);
   }
 
   return {
-    result: filteredResult,
+    result: {
+      gear_gaps: filteredGaps,
+      questions: filteredQuestions,
+    },
     droppedCount,
   };
 }
@@ -407,6 +603,7 @@ export async function reviewPlan(trek, ruleResults, settings, signal) {
   const model = settings?.model || 'gemma3:4b';
   const timeoutSec = typeof settings?.reviewTimeoutSec === 'number' ? settings.reviewTimeoutSec : 300;
 
+  const conditions = buildConditions(trek);
   const planSummary = buildPlanSummary(trek);
 
   const ruleIssues = [
@@ -419,7 +616,7 @@ export async function reviewPlan(trek, ruleResults, settings, signal) {
       ? ruleIssues.map((issue) => `- [${issue.level}] ${issue.message}`).join('\n')
       : 'none';
 
-  const userContent = `${planSummary}\n\nrule_check_results:\n${ruleSection}`;
+  const userContent = `${conditions}\n\n${planSummary}\n\nrule_check_results:\n${ruleSection}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -516,5 +713,5 @@ export async function reviewPlan(trek, ruleResults, settings, signal) {
     };
   }
 
-  return filterSuggestions(parsed, planSummary);
+  return filterSuggestions(parsed, trek, planSummary, conditions);
 }
