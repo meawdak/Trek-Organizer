@@ -110,6 +110,20 @@ export const DEFAULT_ESSENTIALS = Object.freeze({
   whistle: false,
 });
 
+export const MEAL_TYPES = Object.freeze({
+  BREAKFAST: 'breakfast',
+  LUNCH: 'lunch',
+  DINNER: 'dinner',
+  SNACKS: 'snacks',
+});
+
+export const MEAL_TYPE_LABELS = Object.freeze({
+  [MEAL_TYPES.BREAKFAST]: 'Breakfast',
+  [MEAL_TYPES.LUNCH]: 'Lunch',
+  [MEAL_TYPES.DINNER]: 'Dinner',
+  [MEAL_TYPES.SNACKS]: 'Snacks & other',
+});
+
 export const GEAR_CATEGORIES = Object.freeze({
   shelter: 'Shelter',
   sleep: 'Sleep system',
@@ -123,25 +137,64 @@ export const GEAR_CATEGORIES = Object.freeze({
   toiletries: 'Toiletries',
   documents: 'Documents & money',
   other: 'Other',
-  gemma: 'Suggested by Gemma',
 });
 
-// Normalizes a free-text or legacy gear category into a standard GEAR_CATEGORIES key.
-export function normalizeGearCategory(cat) {
-  if (typeof cat !== 'string') return 'other';
-  const trimmed = cat.trim().toLowerCase();
-  if (!trimmed) return 'other';
+const GEAR_CATEGORY_KEYWORDS = [
+  { key: 'shelter', patterns: [/\bshelter/i, /\btent/i, /\btarp/i, /\bbivy/i, /\bcamp/i] },
+  { key: 'sleep', patterns: [/\bsleep/i, /\bquilt/i, /\bmat\b/i, /\bmats\b/i, /\bpad/i, /\bmattress/i, /\bblanket/i, /\bliner/i] },
+  { key: 'clothing', patterns: [/\bcloth/i, /\bapparel/i, /\bjacket/i, /\bpant/i, /\btrousers/i, /\bfleece/i, /\blayer/i, /\bshirt/i, /\btshirt/i, /\bglove/i, /\bmitten/i, /\bsock/i, /\bhat/i, /\bcap\b/i, /\bbeanie/i, /\braincoat/i, /\bponcho/i, /\bthermal/i, /\bwear\b/i, /\bbalaclava/i, /\bbuff\b/i] },
+  { key: 'footwear', patterns: [/\bfoot/i, /\bshoe/i, /\bboot/i, /\bgaiter/i, /\bcrampon/i, /\bmicrospike/i, /\bsandal/i] },
+  { key: 'cooking', patterns: [/\bcook/i, /\bstove/i, /\bfuel/i, /\bgas\b/i, /\bpot\b/i, /\bpots\b/i, /\bpan\b/i, /\bpans\b/i, /\bkitchen/i, /\bcutlery/i, /\bspork/i, /\butensil/i, /\blighter/i, /\bmatch(es)?\b/i, /\bburner/i, /\bkettle/i] },
+  { key: 'water', patterns: [/\bwater/i, /\bhydrat/i, /\bbottle/i, /\bfilter/i, /\bpurif/i, /\bbladder/i, /\baquaguard/i, /\bhalogen/i] },
+  { key: 'navigation', patterns: [/\bnav/i, /\bmap\b/i, /\bmaps\b/i, /\bcompass/i, /\bgps/i] },
+  { key: 'lighting_power', patterns: [/\blight/i, /\btorch/i, /\bheadlamp/i, /\blamp/i, /\bpower/i, /\bbatter/i, /\bcharger/i, /\bpowerbank/i, /\bcable/i, /\belectronic/i] },
+  { key: 'first_aid', patterns: [/\bfirst[\s_-]?aid/i, /\bmedic/i, /\bbandage/i, /\bgauze/i, /\bplaster/i, /\bantiseptic/i, /\bors\b/i, /\bdressing/i, /\btweezer/i] },
+  { key: 'toiletries', patterns: [/\btoiletr/i, /\bhygiene/i, /\bsoap/i, /\btowel/i, /\btooth/i, /brush/i, /paste/i, /\bsunscreen/i, /\bsanitiz/i, /\bwipes?\b/i, /\btissue/i, /\blip[\s_-]?balm/i] },
+  { key: 'documents', patterns: [/\bdoc/i, /\bmoney/i, /\bcash\b/i, /\bid\b/i, /\bcard/i, /\bpermit/i, /\bpassport/i, /\bticket/i, /\bwallet/i, /\binsurance/i] },
+];
 
-  for (const [key, label] of Object.entries(GEAR_CATEGORIES)) {
-    if (
-      trimmed === key.toLowerCase() ||
-      trimmed === label.toLowerCase() ||
-      trimmed === key.replace(/_/g, ' ').toLowerCase() ||
-      trimmed === key.replace(/_/g, '-').toLowerCase()
-    ) {
-      return key;
+// Normalizes a free-text, AI-generated, or legacy gear category into a standard GEAR_CATEGORIES key.
+// Maps unknown categories or AI items by closest case-insensitive name match or keyword match, falling back to 'other'.
+export function normalizeGearCategory(cat, itemName = '') {
+  const catStr = typeof cat === 'string' ? cat.trim() : '';
+  const itemStr = typeof itemName === 'string' ? itemName.trim() : '';
+
+  if (catStr) {
+    const trimmed = catStr.toLowerCase();
+    const cleanTrimmed = trimmed.replace(/[_-]/g, ' ');
+    for (const [key, label] of Object.entries(GEAR_CATEGORIES)) {
+      const cleanKey = key.replace(/[_-]/g, ' ').toLowerCase();
+      const cleanLabel = label.replace(/[_-]/g, ' ').toLowerCase();
+      if (
+        trimmed === key.toLowerCase() ||
+        cleanTrimmed === cleanKey ||
+        cleanTrimmed === cleanLabel ||
+        (key === 'lighting_power' && (trimmed === 'lighting' || trimmed === 'power' || cleanTrimmed === 'lighting and power')) ||
+        (key === 'documents' && (trimmed === 'documents' || trimmed === 'money' || cleanTrimmed === 'documents and money'))
+      ) {
+        return key;
+      }
+    }
+
+    // If not a legacy Gemma label, try keyword match on category text
+    if (trimmed !== 'gemma' && trimmed !== 'suggested by gemma') {
+      for (const entry of GEAR_CATEGORY_KEYWORDS) {
+        if (entry.patterns.some((pat) => pat.test(trimmed))) {
+          return entry.key;
+        }
+      }
     }
   }
+
+  // If category was 'gemma', 'suggested by gemma', empty, or unknown, try matching itemName
+  if (itemStr) {
+    for (const entry of GEAR_CATEGORY_KEYWORDS) {
+      if (entry.patterns.some((pat) => pat.test(itemStr))) {
+        return entry.key;
+      }
+    }
+  }
+
   return 'other';
 }
 
@@ -311,7 +364,7 @@ export function normalizeTrek(trek) {
     ? trek.gear.map((g) => ({
         id: g?.id || crypto.randomUUID(),
         item: g?.item ?? '',
-        category: normalizeGearCategory(g?.category),
+        category: normalizeGearCategory(g?.category, g?.item),
         source: g?.source ?? SOURCES.HAVE,
         packed: Boolean(g?.packed),
       }))

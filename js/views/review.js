@@ -910,7 +910,7 @@ export function renderReview(container, trekId) {
         currentTrek.gear.push({
           id: crypto.randomUUID(),
           item: item.item || '',
-          category: normalizeGearCategory(item.category),
+          category: normalizeGearCategory(item.category, item.item),
           source: 'have',
           packed: false,
         });
@@ -1053,7 +1053,7 @@ export function renderReview(container, trekId) {
           currentTrek.gear.push({
             id: crypto.randomUUID(),
             item: g.item || '',
-            category: normalizeGearCategory(g.category),
+            category: normalizeGearCategory(g.category, g.item),
             source: 'have',
             packed: false,
           });
@@ -1176,7 +1176,7 @@ export function renderReview(container, trekId) {
         currentTrek.gear.push({
           id: crypto.randomUUID(),
           item: itemName,
-          category: 'gemma',
+          category: normalizeGearCategory(itemName, itemName),
           source: 'buy',
           packed: false,
         });

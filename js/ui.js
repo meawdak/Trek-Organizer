@@ -442,12 +442,7 @@ export function mountListEditor(container, options) {
       wrapper.appendChild(card);
     });
 
-    // Add button
-    const btnAdd = document.createElement('button');
-    btnAdd.type = 'button';
-    btnAdd.className = 'btn btn-add btn-block btn-add-item';
-    btnAdd.textContent = addLabel;
-    btnAdd.addEventListener('click', () => {
+    function triggerAdd() {
       // Read fields of any currently expanded card
       expandedIds.forEach((id) => {
         const cardEl = container.querySelector(`[data-id="${id}"]`);
@@ -477,13 +472,61 @@ export function mountListEditor(container, options) {
           if (firstInput) firstInput.focus();
         }
       }, 50);
-    });
 
-    wrapper.appendChild(btnAdd);
+      return newItem;
+    }
+
+    // Add button
+    if (addLabel) {
+      const btnAdd = document.createElement('button');
+      btnAdd.type = 'button';
+      btnAdd.className = 'btn btn-add btn-block btn-add-item';
+      btnAdd.textContent = addLabel;
+      btnAdd.addEventListener('click', triggerAdd);
+      wrapper.appendChild(btnAdd);
+    }
+
     container.appendChild(wrapper);
   }
 
   render();
+
+  return {
+    addItem: () => {
+      // Read fields of any currently expanded card
+      expandedIds.forEach((id) => {
+        const cardEl = container.querySelector(`[data-id="${id}"]`);
+        const item = items.find((it) => it.id === id);
+        if (cardEl && item) {
+          readItemFields(cardEl, item);
+        }
+      });
+
+      // Collapse all other cards
+      expandedIds.clear();
+
+      // Clean up empty cards
+      cleanupEmptyItems();
+
+      const newItem = createDefaultItem();
+      items.push(newItem);
+      expandedIds.add(newItem.id);
+      onUpdate();
+      render();
+
+      setTimeout(() => {
+        const newCard = container.querySelector(`[data-id="${newItem.id}"]`);
+        if (newCard) {
+          const firstInput = newCard.querySelector('input:not([readonly]):not([disabled]), select, textarea');
+          if (firstInput) firstInput.focus();
+        }
+      }, 50);
+
+      return newItem;
+    },
+    render,
+    expandedIds,
+  };
 }
 
 // Triggers a browser file download of an object serialized as JSON.

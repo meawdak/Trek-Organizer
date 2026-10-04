@@ -924,15 +924,18 @@ textarea.text-input {
   color: var(--text-secondary);
 }
 
-/* Gear grouped sections */
+/* Grouped collapsible sections (Gear, Food, Travel, Stays, Contacts, Permits) */
+.collapsible-sections-wrapper,
 .gear-sections-wrapper {
   margin-top: 14px;
 }
 
+.collapsible-section-group,
 .gear-section-group {
   margin-bottom: 12px;
 }
 
+.collapsible-section-header,
 .gear-section-header {
   display: flex;
   align-items: center;
@@ -948,15 +951,23 @@ textarea.text-input {
   transition: background-color 0.15s ease;
 }
 
+.collapsible-section-header:hover,
 .gear-section-header:hover {
   background-color: #f3f4f6;
 }
 
+.collapsible-section-header:active,
+.gear-section-header:active {
+  background-color: #e5e7eb;
+}
+
+.collapsible-section-header:focus-visible,
 .gear-section-header:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
+.collapsible-section-header-left,
 .gear-section-header-left {
   display: flex;
   align-items: center;
@@ -965,14 +976,24 @@ textarea.text-input {
   min-width: 0;
 }
 
+.collapsible-section-toggle-icon,
 .gear-section-toggle-icon {
+  display: inline-block;
   font-size: 1rem;
   color: var(--text-secondary);
   width: 16px;
   text-align: center;
   flex-shrink: 0;
+  transition: transform 0.2s ease;
+  transform: rotate(0deg);
 }
 
+.collapsible-section-header[aria-expanded="true"] .collapsible-section-toggle-icon,
+.gear-section-header[aria-expanded="true"] .gear-section-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.collapsible-section-title,
 .gear-section-title {
   font-weight: 700;
   font-size: 1rem;
@@ -983,6 +1004,7 @@ textarea.text-input {
   text-overflow: ellipsis;
 }
 
+.collapsible-section-count,
 .gear-section-count {
   font-size: 0.85rem;
   font-weight: 600;
@@ -990,18 +1012,33 @@ textarea.text-input {
   flex-shrink: 0;
 }
 
+.collapsible-section-warning,
+.gear-section-warning {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #b45309;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.collapsible-section-header-right,
 .gear-section-header-right {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 
+.btn-collapsible-section-add,
 .btn-gear-section-add {
   padding: 6px 14px;
   font-size: 0.875rem;
   min-height: 38px;
 }
 
+.collapsible-section-body,
 .gear-section-body {
   padding-top: 6px;
 }
@@ -1012,38 +1049,35 @@ textarea.text-input {
   gap: 8px;
 }
 
-.gear-add-other-section-row {
-  margin-top: 20px;
-  padding: 14px;
-  background-color: #f9fafb;
-  border: 1px dashed var(--border-color);
-  border-radius: 6px;
-}
-
-.gear-add-other-controls-wrap {
-  margin-bottom: 0;
-}
-
-.gear-add-other-controls {
+.gear-top-actions-area {
+  margin-top: 14px;
+  margin-bottom: 14px;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-gear-add-top {
+  min-height: 44px;
+}
+
+.gear-top-add-card {
+  border: 1px solid var(--border-color);
+  background-color: var(--surface-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.gear-first-aid-top-wrap {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
-  margin-top: 6px;
 }
 
-.gear-add-other-controls select {
-  flex: 1;
+.btn-first-aid-top {
+  align-self: flex-start;
   min-height: 44px;
-}
-
-.gear-add-other-controls button {
-  min-height: 44px;
-  padding: 0 16px;
-  white-space: nowrap;
-}
-
-.gear-other-first-aid-wrap {
-  margin-top: 12px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
 }
 
 /* Safety section blocks (B4) */

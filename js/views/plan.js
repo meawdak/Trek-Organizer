@@ -13,6 +13,8 @@ import {
   CONTACT_ROLE_LABELS,
   GEAR_CATEGORIES,
   normalizeGearCategory,
+  MEAL_TYPES,
+  MEAL_TYPE_LABELS,
 } from '../model.js';
 import { sharePlan } from '../share.js';
 import { isSectionComplete } from '../checks.js';
@@ -32,6 +34,77 @@ import {
   downloadJsonFile,
   TRASH_ICON_SVG,
 } from '../ui.js';
+
+/**
+ * Creates and returns a collapsible section group DOM element.
+ * Reuses the existing section header component with smooth 0.2s arrow rotation.
+ */
+function createCollapsibleSectionGroup({
+  key,
+  title,
+  countText,
+  hasWarning = false,
+  warningTooltip = 'Has unresolved items or warnings',
+  isOpen = false,
+  addLabel = '+ Add',
+  onToggle,
+  onAdd,
+  renderBody,
+}) {
+  const group = document.createElement('div');
+  group.className = 'collapsible-section-group gear-section-group';
+  group.dataset.sectionKey = key;
+
+  const header = document.createElement('div');
+  header.className = 'collapsible-section-header gear-section-header';
+  header.setAttribute('role', 'button');
+  header.setAttribute('tabindex', '0');
+  header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  header.setAttribute('aria-label', `${isOpen ? 'Collapse' : 'Expand'} ${title} section`);
+
+  const tooltip = warningTooltip || 'Has unresolved items or warnings';
+
+  header.innerHTML = `
+    <div class="collapsible-section-header-left gear-section-header-left">
+      <span class="collapsible-section-toggle-icon gear-section-toggle-icon" aria-hidden="true">▸</span>
+      <span class="collapsible-section-title gear-section-title">${escapeHtml(title)}</span>
+      <span class="collapsible-section-count gear-section-count">${escapeHtml(countText)}</span>
+      ${hasWarning ? `<span class="collapsible-section-warning gear-section-warning" title="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}">⚠</span>` : ''}
+    </div>
+    <div class="collapsible-section-header-right gear-section-header-right">
+      <button type="button" class="btn btn-add btn-sm btn-collapsible-section-add btn-gear-section-add" data-key="${escapeHtml(key)}" aria-label="Add item to ${escapeHtml(title)}">${escapeHtml(addLabel)}</button>
+    </div>
+  `;
+
+  header.addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    if (onToggle) onToggle();
+  });
+
+  header.addEventListener('keydown', (e) => {
+    if (e.target === header && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      if (onToggle) onToggle();
+    }
+  });
+
+  const btnAdd = header.querySelector('.btn-collapsible-section-add');
+  btnAdd.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (onAdd) onAdd();
+  });
+
+  group.appendChild(header);
+
+  if (isOpen && renderBody) {
+    const body = document.createElement('div');
+    body.className = 'collapsible-section-body gear-section-body';
+    renderBody(body);
+    group.appendChild(body);
+  }
+
+  return group;
+}
 
 export const PLAN_SECTIONS = [
   { key: 'overview', label: 'Overview' },
@@ -197,68 +270,117 @@ function renderPermitsSection(container, trek, onSave) {
   }
   trek.noPermitsRequired = Boolean(trek.noPermitsRequired);
 
-  container.innerHTML = `
-    <div class="form-group permits-checkbox-group">
-      <label class="checkbox-label" for="no-permits-required">
-        <input type="checkbox" id="no-permits-required" ${trek.noPermitsRequired ? 'checked' : ''} />
-        <span>No permits required (I've checked)</span>
-      </label>
-    </div>
-    <div id="permits-list-container"></div>
-  `;
+  // In-memory UI state: starts collapsed by default
+  const openSections = new Set();
+  let permitsEditor = null;
 
-  const checkbox = container.querySelector('#no-permits-required');
-  const permitsListContainer = container.querySelector('#permits-list-container');
+  function render() {
+    container.innerHTML = `
+      <div class="form-group permits-checkbox-group">
+        <label class="checkbox-label" for="no-permits-required">
+          <input type="checkbox" id="no-permits-required" ${trek.noPermitsRequired ? 'checked' : ''} />
+          <span>No permits required (I've checked)</span>
+        </label>
+      </div>
+      <div id="permits-groups-container" class="collapsible-sections-wrapper"></div>
+    `;
 
-  checkbox.addEventListener('change', () => {
-    trek.noPermitsRequired = checkbox.checked;
-    onSave();
-  });
+    const checkbox = container.querySelector('#no-permits-required');
+    checkbox.addEventListener('change', () => {
+      trek.noPermitsRequired = checkbox.checked;
+      onSave();
+      render();
+    });
 
-  mountListEditor(permitsListContainer, {
-    items: trek.permits,
-    emptyHint: 'No permits recorded. Has the requirement been checked?',
-    addLabel: '+ Add permit',
-    getItemTitle: (permit, idx) => (permit.name && permit.name.trim() ? permit.name.trim() : `Permit ${idx + 1} (no name entered)`),
-    getItemSubtitle: (permit) => permit.authority || '',
-    createDefaultItem: () => ({
-      id: crypto.randomUUID(),
-      name: '',
-      authority: '',
-      status: 'unknown',
-      notes: '',
-    }),
-    isItemEmpty: (permit) =>
-      !permit.name?.trim() &&
-      !permit.authority?.trim() &&
-      !permit.notes?.trim() &&
-      (permit.status === 'unknown' || !permit.status),
-    renderItemFields: (permit) => `
-      <div class="form-group">
-        <label class="form-label">Permit name</label>
-        <input type="text" name="name" class="text-input" value="${escapeHtml(permit.name || '')}" placeholder="e.g. Forest Entry Permit" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Where/who issues it</label>
-        <input type="text" name="authority" class="text-input" value="${escapeHtml(permit.authority || '')}" placeholder="e.g. DFO Office or Online Portal" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        ${renderStatusSelect({ name: 'status', value: permit.status })}
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notes</label>
-        <textarea name="notes" class="text-input" rows="2" placeholder="Fee, documents needed, etc.">${escapeHtml(permit.notes || '')}</textarea>
-      </div>
-    `,
-    readItemFields: (cardEl, permit) => {
-      permit.name = cardEl.querySelector('[name="name"]')?.value || '';
-      permit.authority = cardEl.querySelector('[name="authority"]')?.value || '';
-      permit.status = cardEl.querySelector('[name="status"]')?.value || 'unknown';
-      permit.notes = cardEl.querySelector('[name="notes"]')?.value || '';
-    },
-    onUpdate: onSave,
-  });
+    const groupsContainer = container.querySelector('#permits-groups-container');
+    const count = trek.permits.length;
+    const hasWarning = trek.permits.some((p) => p.status !== 'confirmed') || (!trek.noPermitsRequired && count === 0);
+    const isOpen = openSections.has('permits');
+
+    const groupEl = createCollapsibleSectionGroup({
+      key: 'permits',
+      title: 'Permits',
+      countText: `(${count})`,
+      hasWarning,
+      isOpen,
+      addLabel: '+ Add',
+      onToggle: () => {
+        if (openSections.has('permits')) {
+          openSections.delete('permits');
+          permitsEditor = null;
+        } else {
+          openSections.add('permits');
+        }
+        render();
+      },
+      onAdd: () => {
+        if (!openSections.has('permits')) {
+          openSections.add('permits');
+          render();
+        }
+        if (permitsEditor) {
+          permitsEditor.addItem();
+        }
+      },
+      renderBody: (bodyEl) => {
+        permitsEditor = mountListEditor(bodyEl, {
+          items: trek.permits,
+          emptyHint: 'No permits recorded. Has the requirement been checked?',
+          addLabel: '',
+          getItemTitle: (permit, idx) => (permit.name && permit.name.trim() ? permit.name.trim() : `Permit ${idx + 1} (no name entered)`),
+          getItemSubtitle: (permit) => permit.authority || '',
+          createDefaultItem: () => ({
+            id: crypto.randomUUID(),
+            name: '',
+            authority: '',
+            status: 'unknown',
+            notes: '',
+          }),
+          isItemEmpty: (permit) =>
+            !permit.name?.trim() &&
+            !permit.authority?.trim() &&
+            !permit.notes?.trim() &&
+            (permit.status === 'unknown' || !permit.status),
+          renderItemFields: (permit) => `
+            <div class="form-group">
+              <label class="form-label">Permit name</label>
+              <input type="text" name="name" class="text-input" value="${escapeHtml(permit.name || '')}" placeholder="e.g. Forest Entry Permit" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Where/who issues it</label>
+              <input type="text" name="authority" class="text-input" value="${escapeHtml(permit.authority || '')}" placeholder="e.g. DFO Office or Online Portal" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              ${renderStatusSelect({ name: 'status', value: permit.status })}
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" class="text-input" rows="2" placeholder="Fee, documents needed, etc.">${escapeHtml(permit.notes || '')}</textarea>
+            </div>
+          `,
+          readItemFields: (cardEl, permit) => {
+            permit.name = cardEl.querySelector('[name="name"]')?.value || '';
+            permit.authority = cardEl.querySelector('[name="authority"]')?.value || '';
+            permit.status = cardEl.querySelector('[name="status"]')?.value || 'unknown';
+            permit.notes = cardEl.querySelector('[name="notes"]')?.value || '';
+          },
+          onUpdate: () => {
+            onSave();
+            const countSpan = groupEl.querySelector('.collapsible-section-count');
+            if (countSpan) countSpan.textContent = `(${trek.permits.length})`;
+            const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+            const stillWarn = trek.permits.some((p) => p.status !== 'confirmed') || (!trek.noPermitsRequired && trek.permits.length === 0);
+            if (warnSpan) warnSpan.hidden = !stillWarn;
+          },
+        });
+      },
+    });
+
+    groupsContainer.appendChild(groupEl);
+  }
+
+  render();
 }
 
 // Helper to format travel mode name for card title
@@ -268,7 +390,7 @@ function formatTravelMode(mode) {
   return mode.charAt(0).toUpperCase() + mode.slice(1);
 }
 
-// Renders and binds the Travel legs list section with three headed groups.
+// Renders and binds the Travel legs list section with three collapsible groups.
 function renderTravelSection(container, trek, onSave) {
   if (!Array.isArray(trek.travel)) {
     trek.travel = [];
@@ -290,174 +412,221 @@ function renderTravelSection(container, trek, onSave) {
     onSave();
   };
 
-  container.innerHTML = `
-    <div class="travel-groups">
-      <div class="travel-group">
-        <h3 class="travel-group-title">Approach to trailhead</h3>
-        <div id="travel-to-container"></div>
-      </div>
-      <div class="travel-group">
-        <h3 class="travel-group-title">During trek</h3>
-        <div id="travel-during-container"></div>
-      </div>
-      <div class="travel-group">
-        <h3 class="travel-group-title">Return</h3>
-        <div id="travel-return-container"></div>
-      </div>
-    </div>
-  `;
+  // In-memory UI state: all groups start collapsed by default
+  const openSections = new Set();
+  const travelEditors = new Map();
 
   const groups = [
     {
       direction: DIRECTIONS.TO,
-      containerId: '#travel-to-container',
+      title: 'Approach to trailhead',
       emptyHint: 'No approach travel added yet.',
       defaultMode: TRAVEL_MODES.TRAIN,
     },
     {
       direction: DIRECTIONS.DURING,
-      containerId: '#travel-during-container',
+      title: 'During trek',
       emptyHint: 'No travel during the trek (optional).',
       defaultMode: TRAVEL_MODES.SHARED_JEEP,
     },
     {
       direction: DIRECTIONS.RETURN,
-      containerId: '#travel-return-container',
+      title: 'Return',
       emptyHint: 'No return travel added yet.',
       defaultMode: TRAVEL_MODES.TRAIN,
     },
   ];
 
-  groups.forEach(({ direction, containerId, emptyHint, defaultMode }) => {
-    const listContainer = container.querySelector(containerId);
-    const legsList = direction === DIRECTIONS.TO
-      ? toLegs
-      : (direction === DIRECTIONS.DURING ? duringLegs : returnLegs);
+  function render() {
+    container.innerHTML = `
+      <div class="travel-groups collapsible-sections-wrapper"></div>
+    `;
 
-    mountListEditor(listContainer, {
-      items: legsList,
-      emptyHint,
-      addLabel: '+ Add travel leg',
-      getItemTitle: (leg, idx) => {
-        const fromTo = leg.from && leg.to
-          ? `${leg.from} → ${leg.to}`
-          : (leg.from ? `From ${leg.from}` : (leg.to ? `To ${leg.to}` : `Leg ${idx + 1} (no route entered)`));
-        return `${formatTravelMode(leg.mode)}: ${fromTo}`;
-      },
-      getItemSubtitle: (leg) => {
-        const parts = [];
-        if (leg.departAt) parts.push(`Departs: ${formatDateTime(leg.departAt)}`);
-        if (leg.arriveAt) parts.push(`Arrives: ${formatDateTime(leg.arriveAt)}`);
-        return parts.join(' • ');
-      },
-      createDefaultItem: () => ({
-        id: crypto.randomUUID(),
-        direction,
-        mode: defaultMode,
-        from: '',
-        to: '',
-        departAt: '',
-        arriveAt: '',
-        bookingRef: '',
-        status: 'unknown',
-        notes: '',
-      }),
-      isItemEmpty: (leg) =>
-        !leg.from?.trim() &&
-        !leg.to?.trim() &&
-        !leg.departAt?.trim() &&
-        !leg.arriveAt?.trim() &&
-        !leg.bookingRef?.trim() &&
-        !leg.notes?.trim() &&
-        (leg.status === 'unknown' || !leg.status),
-      onAfterDelete: syncTravel,
-      renderItemFields: (leg) => {
-        const depart = splitIsoDateTime(leg.departAt);
-        const arrive = splitIsoDateTime(leg.arriveAt);
-        return `
-        <div class="form-group">
-          <label class="form-label">Mode</label>
-          <select name="mode" class="text-input">
-            <option value="${TRAVEL_MODES.TRAIN}" ${leg.mode === TRAVEL_MODES.TRAIN ? 'selected' : ''}>Train</option>
-            <option value="${TRAVEL_MODES.BUS}" ${leg.mode === TRAVEL_MODES.BUS ? 'selected' : ''}>Bus</option>
-            <option value="${TRAVEL_MODES.SHARED_JEEP}" ${leg.mode === TRAVEL_MODES.SHARED_JEEP ? 'selected' : ''}>Shared jeep</option>
-            <option value="${TRAVEL_MODES.TAXI}" ${leg.mode === TRAVEL_MODES.TAXI ? 'selected' : ''}>Taxi</option>
-            <option value="${TRAVEL_MODES.FLIGHT}" ${leg.mode === TRAVEL_MODES.FLIGHT ? 'selected' : ''}>Flight</option>
-            <option value="${TRAVEL_MODES.OTHER}" ${leg.mode === TRAVEL_MODES.OTHER ? 'selected' : ''}>Other</option>
-          </select>
-        </div>
+    const groupsWrapper = container.querySelector('.travel-groups');
 
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">From</label>
-            <input type="text" name="from" class="text-input" value="${escapeHtml(leg.from || '')}" placeholder="Departure place" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">To</label>
-            <input type="text" name="to" class="text-input" value="${escapeHtml(leg.to || '')}" placeholder="Arrival place" />
-          </div>
-        </div>
+    groups.forEach(({ direction, title, emptyHint, defaultMode }) => {
+      const legsList = direction === DIRECTIONS.TO
+        ? toLegs
+        : (direction === DIRECTIONS.DURING ? duringLegs : returnLegs);
 
-        <div class="form-row form-row-datetime">
-          <div class="form-group form-group-date">
-            <label class="form-label">Departure date</label>
-            <input type="date" name="departDate" class="text-input" value="${escapeHtml(depart.date)}" />
-          </div>
-          <div class="form-group form-group-time">
-            <label class="form-label">Time (optional)</label>
-            <input type="time" name="departTime" class="text-input" value="${escapeHtml(depart.time)}" />
-          </div>
-        </div>
+      const count = legsList.length;
+      const countText = `(${count})`;
+      const hasWarning = legsList.some((l) => l.status !== 'confirmed') || (direction !== DIRECTIONS.DURING && count === 0);
+      const isOpen = openSections.has(direction);
 
-        <div class="form-row form-row-datetime">
-          <div class="form-group form-group-date">
-            <label class="form-label">Arrival date</label>
-            <input type="date" name="arriveDate" class="text-input" value="${escapeHtml(arrive.date)}" />
-          </div>
-          <div class="form-group form-group-time">
-            <label class="form-label">Time (optional)</label>
-            <input type="time" name="arriveTime" class="text-input" value="${escapeHtml(arrive.time)}" />
-          </div>
-        </div>
+      const groupEl = createCollapsibleSectionGroup({
+        key: direction,
+        title,
+        countText,
+        hasWarning,
+        isOpen,
+        addLabel: '+ Add',
+        onToggle: () => {
+          if (openSections.has(direction)) {
+            openSections.delete(direction);
+            travelEditors.delete(direction);
+          } else {
+            openSections.add(direction);
+          }
+          render();
+        },
+        onAdd: () => {
+          if (!openSections.has(direction)) {
+            openSections.add(direction);
+            render();
+          }
+          const ed = travelEditors.get(direction);
+          if (ed) {
+            ed.addItem();
+          }
+        },
+        renderBody: (bodyEl) => {
+          const editor = mountListEditor(bodyEl, {
+            items: legsList,
+            emptyHint,
+            addLabel: '',
+            getItemTitle: (leg, idx) => {
+              const fromTo = leg.from && leg.to
+                ? `${leg.from} → ${leg.to}`
+                : (leg.from ? `From ${leg.from}` : (leg.to ? `To ${leg.to}` : `Leg ${idx + 1} (no route entered)`));
+              return `${formatTravelMode(leg.mode)}: ${fromTo}`;
+            },
+            getItemSubtitle: (leg) => {
+              const parts = [];
+              if (leg.departAt) parts.push(`Departs: ${formatDateTime(leg.departAt)}`);
+              if (leg.arriveAt) parts.push(`Arrives: ${formatDateTime(leg.arriveAt)}`);
+              return parts.join(' • ');
+            },
+            createDefaultItem: () => ({
+              id: crypto.randomUUID(),
+              direction,
+              mode: defaultMode,
+              from: '',
+              to: '',
+              departAt: '',
+              arriveAt: '',
+              bookingRef: '',
+              status: 'unknown',
+              notes: '',
+            }),
+            isItemEmpty: (leg) =>
+              !leg.from?.trim() &&
+              !leg.to?.trim() &&
+              !leg.departAt?.trim() &&
+              !leg.arriveAt?.trim() &&
+              !leg.bookingRef?.trim() &&
+              !leg.notes?.trim() &&
+              (leg.status === 'unknown' || !leg.status),
+            onAfterDelete: () => {
+              syncTravel();
+              const countSpan = groupEl.querySelector('.collapsible-section-count');
+              if (countSpan) countSpan.textContent = `(${legsList.length})`;
+              const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+              const stillWarn = legsList.some((l) => l.status !== 'confirmed') || (direction !== DIRECTIONS.DURING && legsList.length === 0);
+              if (warnSpan) warnSpan.hidden = !stillWarn;
+            },
+            renderItemFields: (leg) => {
+              const depart = splitIsoDateTime(leg.departAt);
+              const arrive = splitIsoDateTime(leg.arriveAt);
+              return `
+              <div class="form-group">
+                <label class="form-label">Mode</label>
+                <select name="mode" class="text-input">
+                  <option value="${TRAVEL_MODES.TRAIN}" ${leg.mode === TRAVEL_MODES.TRAIN ? 'selected' : ''}>Train</option>
+                  <option value="${TRAVEL_MODES.BUS}" ${leg.mode === TRAVEL_MODES.BUS ? 'selected' : ''}>Bus</option>
+                  <option value="${TRAVEL_MODES.SHARED_JEEP}" ${leg.mode === TRAVEL_MODES.SHARED_JEEP ? 'selected' : ''}>Shared jeep</option>
+                  <option value="${TRAVEL_MODES.TAXI}" ${leg.mode === TRAVEL_MODES.TAXI ? 'selected' : ''}>Taxi</option>
+                  <option value="${TRAVEL_MODES.FLIGHT}" ${leg.mode === TRAVEL_MODES.FLIGHT ? 'selected' : ''}>Flight</option>
+                  <option value="${TRAVEL_MODES.OTHER}" ${leg.mode === TRAVEL_MODES.OTHER ? 'selected' : ''}>Other</option>
+                </select>
+              </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Booking ref</label>
-            <input type="text" name="bookingRef" class="text-input" value="${escapeHtml(leg.bookingRef || '')}" placeholder="PNR / Ticket #" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Status</label>
-            ${renderStatusSelect({ name: 'status', value: leg.status })}
-          </div>
-        </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">From</label>
+                  <input type="text" name="from" class="text-input" value="${escapeHtml(leg.from || '')}" placeholder="Departure place" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">To</label>
+                  <input type="text" name="to" class="text-input" value="${escapeHtml(leg.to || '')}" placeholder="Arrival place" />
+                </div>
+              </div>
 
-        <div class="form-group">
-          <label class="form-label">Notes</label>
-          <textarea name="notes" class="text-input" rows="2" placeholder="Coach/seat number, pickup point, etc.">${escapeHtml(leg.notes || '')}</textarea>
-        </div>
-      `;
-      },
-      readItemFields: (cardEl, leg) => {
-        leg.direction = direction;
-        leg.mode = cardEl.querySelector('[name="mode"]')?.value || defaultMode;
-        leg.from = cardEl.querySelector('[name="from"]')?.value || '';
-        leg.to = cardEl.querySelector('[name="to"]')?.value || '';
+              <div class="form-row form-row-datetime">
+                <div class="form-group form-group-date">
+                  <label class="form-label">Departure date</label>
+                  <input type="date" name="departDate" class="text-input" value="${escapeHtml(depart.date)}" />
+                </div>
+                <div class="form-group form-group-time">
+                  <label class="form-label">Time (optional)</label>
+                  <input type="time" name="departTime" class="text-input" value="${escapeHtml(depart.time)}" />
+                </div>
+              </div>
 
-        const departDate = cardEl.querySelector('[name="departDate"]')?.value || '';
-        const departTime = cardEl.querySelector('[name="departTime"]')?.value || '';
-        leg.departAt = combineDateAndTime(departDate, departTime);
+              <div class="form-row form-row-datetime">
+                <div class="form-group form-group-date">
+                  <label class="form-label">Arrival date</label>
+                  <input type="date" name="arriveDate" class="text-input" value="${escapeHtml(arrive.date)}" />
+                </div>
+                <div class="form-group form-group-time">
+                  <label class="form-label">Time (optional)</label>
+                  <input type="time" name="arriveTime" class="text-input" value="${escapeHtml(arrive.time)}" />
+                </div>
+              </div>
 
-        const arriveDate = cardEl.querySelector('[name="arriveDate"]')?.value || '';
-        const arriveTime = cardEl.querySelector('[name="arriveTime"]')?.value || '';
-        leg.arriveAt = combineDateAndTime(arriveDate, arriveTime);
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Booking ref</label>
+                  <input type="text" name="bookingRef" class="text-input" value="${escapeHtml(leg.bookingRef || '')}" placeholder="PNR / Ticket #" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Status</label>
+                  ${renderStatusSelect({ name: 'status', value: leg.status })}
+                </div>
+              </div>
 
-        leg.bookingRef = cardEl.querySelector('[name="bookingRef"]')?.value || '';
-        leg.status = cardEl.querySelector('[name="status"]')?.value || 'unknown';
-        leg.notes = cardEl.querySelector('[name="notes"]')?.value || '';
-      },
-      onUpdate: syncTravel,
+              <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea name="notes" class="text-input" rows="2" placeholder="Coach/seat number, pickup point, etc.">${escapeHtml(leg.notes || '')}</textarea>
+              </div>
+            `;
+            },
+            readItemFields: (cardEl, leg) => {
+              leg.direction = direction;
+              leg.mode = cardEl.querySelector('[name="mode"]')?.value || defaultMode;
+              leg.from = cardEl.querySelector('[name="from"]')?.value || '';
+              leg.to = cardEl.querySelector('[name="to"]')?.value || '';
+
+              const departDate = cardEl.querySelector('[name="departDate"]')?.value || '';
+              const departTime = cardEl.querySelector('[name="departTime"]')?.value || '';
+              leg.departAt = combineDateAndTime(departDate, departTime);
+
+              const arriveDate = cardEl.querySelector('[name="arriveDate"]')?.value || '';
+              const arriveTime = cardEl.querySelector('[name="arriveTime"]')?.value || '';
+              leg.arriveAt = combineDateAndTime(arriveDate, arriveTime);
+
+              leg.bookingRef = cardEl.querySelector('[name="bookingRef"]')?.value || '';
+              leg.status = cardEl.querySelector('[name="status"]')?.value || 'unknown';
+              leg.notes = cardEl.querySelector('[name="notes"]')?.value || '';
+            },
+            onUpdate: () => {
+              syncTravel();
+              const countSpan = groupEl.querySelector('.collapsible-section-count');
+              if (countSpan) countSpan.textContent = `(${legsList.length})`;
+              const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+              const stillWarn = legsList.some((l) => l.status !== 'confirmed') || (direction !== DIRECTIONS.DURING && legsList.length === 0);
+              if (warnSpan) warnSpan.hidden = !stillWarn;
+            },
+          });
+          travelEditors.set(direction, editor);
+        },
+      });
+
+      groupsWrapper.appendChild(groupEl);
     });
-  });
+  }
+
+  render();
 }
 
 // Renders and binds the Stays list section with the no off-trail stays checkbox.
@@ -466,98 +635,147 @@ function renderStaysSection(container, trek, onSave) {
     trek.stays = [];
   }
 
-  container.innerHTML = `
-    <div class="form-group stays-checkbox-group">
-      <label class="checkbox-label" for="no-off-trail-stays">
-        <input type="checkbox" id="no-off-trail-stays" ${trek.noOffTrailStays ? 'checked' : ''} />
-        <span>No off-trail stays</span>
-      </label>
-    </div>
-    <div id="stays-list-container"></div>
-  `;
+  // In-memory UI state: starts collapsed by default
+  const openSections = new Set();
+  let staysEditor = null;
 
-  const checkbox = container.querySelector('#no-off-trail-stays');
-  const staysListContainer = container.querySelector('#stays-list-container');
-
-  checkbox.addEventListener('change', () => {
-    trek.noOffTrailStays = checkbox.checked;
-    onSave();
-  });
-
-  mountListEditor(staysListContainer, {
-    items: trek.stays,
-    emptyHint: 'No off-trail stays recorded.',
-    addLabel: '+ Add stay',
-    getItemTitle: (stay, idx) =>
-      stay.name && stay.name.trim()
-        ? stay.name.trim()
-        : (stay.place && stay.place.trim() ? `Stay in ${stay.place.trim()}` : `Stay ${idx + 1} (no name entered)`),
-    getItemSubtitle: (stay) => {
-      const parts = [];
-      if (stay.place) parts.push(stay.place);
-      if (stay.checkIn) parts.push(`Check-in: ${formatDate(stay.checkIn)}`);
-      if (stay.nights) parts.push(`${stay.nights} night${stay.nights > 1 ? 's' : ''}`);
-      return parts.join(' • ');
-    },
-    createDefaultItem: () => ({
-      id: crypto.randomUUID(),
-      name: '',
-      place: '',
-      checkIn: '',
-      nights: 1,
-      status: 'unknown',
-      notes: '',
-    }),
-    isItemEmpty: (stay) =>
-      !stay.name?.trim() &&
-      !stay.place?.trim() &&
-      !stay.checkIn?.trim() &&
-      !stay.notes?.trim() &&
-      (stay.status === 'unknown' || !stay.status),
-    renderItemFields: (stay) => `
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Stay name</label>
-          <input type="text" name="name" class="text-input" value="${escapeHtml(stay.name || '')}" placeholder="Hotel / Homestay name" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Place</label>
-          <input type="text" name="place" class="text-input" value="${escapeHtml(stay.place || '')}" placeholder="Town / Village" />
-        </div>
+  function render() {
+    container.innerHTML = `
+      <div class="form-group stays-checkbox-group">
+        <label class="checkbox-label" for="no-off-trail-stays">
+          <input type="checkbox" id="no-off-trail-stays" ${trek.noOffTrailStays ? 'checked' : ''} />
+          <span>No off-trail stays</span>
+        </label>
       </div>
+      <div id="stays-groups-container" class="collapsible-sections-wrapper"></div>
+    `;
 
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Check-in date</label>
-          <input type="date" name="checkIn" class="text-input" value="${escapeHtml(stay.checkIn || '')}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Nights</label>
-          <input type="number" name="nights" min="1" class="text-input" value="${stay.nights != null ? escapeHtml(String(stay.nights)) : '1'}" />
-        </div>
-      </div>
+    const checkbox = container.querySelector('#no-off-trail-stays');
+    checkbox.addEventListener('change', () => {
+      trek.noOffTrailStays = checkbox.checked;
+      onSave();
+      render();
+    });
 
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        ${renderStatusSelect({ name: 'status', value: stay.status })}
-      </div>
+    const groupsContainer = container.querySelector('#stays-groups-container');
+    const count = trek.stays.length;
+    const hasWarning = trek.stays.some((s) => s.status !== 'confirmed') || (!trek.noOffTrailStays && count === 0);
+    const isOpen = openSections.has('stays');
 
-      <div class="form-group">
-        <label class="form-label">Notes</label>
-        <textarea name="notes" class="text-input" rows="2" placeholder="Booking details, contact phone, etc.">${escapeHtml(stay.notes || '')}</textarea>
-      </div>
-    `,
-    readItemFields: (cardEl, stay) => {
-      stay.name = cardEl.querySelector('[name="name"]')?.value || '';
-      stay.place = cardEl.querySelector('[name="place"]')?.value || '';
-      stay.checkIn = cardEl.querySelector('[name="checkIn"]')?.value || '';
-      const nightsVal = cardEl.querySelector('[name="nights"]')?.value;
-      stay.nights = nightsVal ? parseInt(nightsVal, 10) : 1;
-      stay.status = cardEl.querySelector('[name="status"]')?.value || 'unknown';
-      stay.notes = cardEl.querySelector('[name="notes"]')?.value || '';
-    },
-    onUpdate: onSave,
-  });
+    const groupEl = createCollapsibleSectionGroup({
+      key: 'stays',
+      title: 'Off-trail stays',
+      countText: `(${count})`,
+      hasWarning,
+      isOpen,
+      addLabel: '+ Add',
+      onToggle: () => {
+        if (openSections.has('stays')) {
+          openSections.delete('stays');
+          staysEditor = null;
+        } else {
+          openSections.add('stays');
+        }
+        render();
+      },
+      onAdd: () => {
+        if (!openSections.has('stays')) {
+          openSections.add('stays');
+          render();
+        }
+        if (staysEditor) {
+          staysEditor.addItem();
+        }
+      },
+      renderBody: (bodyEl) => {
+        staysEditor = mountListEditor(bodyEl, {
+          items: trek.stays,
+          emptyHint: 'No off-trail stays recorded.',
+          addLabel: '',
+          getItemTitle: (stay, idx) =>
+            stay.name && stay.name.trim()
+              ? stay.name.trim()
+              : (stay.place && stay.place.trim() ? `Stay in ${stay.place.trim()}` : `Stay ${idx + 1} (no name entered)`),
+          getItemSubtitle: (stay) => {
+            const parts = [];
+            if (stay.place) parts.push(stay.place);
+            if (stay.checkIn) parts.push(`Check-in: ${formatDate(stay.checkIn)}`);
+            if (stay.nights) parts.push(`${stay.nights} night${stay.nights > 1 ? 's' : ''}`);
+            return parts.join(' • ');
+          },
+          createDefaultItem: () => ({
+            id: crypto.randomUUID(),
+            name: '',
+            place: '',
+            checkIn: '',
+            nights: 1,
+            status: 'unknown',
+            notes: '',
+          }),
+          isItemEmpty: (stay) =>
+            !stay.name?.trim() &&
+            !stay.place?.trim() &&
+            !stay.checkIn?.trim() &&
+            !stay.notes?.trim() &&
+            (stay.status === 'unknown' || !stay.status),
+          renderItemFields: (stay) => `
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Stay name</label>
+                <input type="text" name="name" class="text-input" value="${escapeHtml(stay.name || '')}" placeholder="Hotel / Homestay name" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Place</label>
+                <input type="text" name="place" class="text-input" value="${escapeHtml(stay.place || '')}" placeholder="Town / Village" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Check-in date</label>
+                <input type="date" name="checkIn" class="text-input" value="${escapeHtml(stay.checkIn || '')}" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nights</label>
+                <input type="number" name="nights" min="1" class="text-input" value="${stay.nights != null ? escapeHtml(String(stay.nights)) : '1'}" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              ${renderStatusSelect({ name: 'status', value: stay.status })}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" class="text-input" rows="2" placeholder="Booking details, contact phone, etc.">${escapeHtml(stay.notes || '')}</textarea>
+            </div>
+          `,
+          readItemFields: (cardEl, stay) => {
+            stay.name = cardEl.querySelector('[name="name"]')?.value || '';
+            stay.place = cardEl.querySelector('[name="place"]')?.value || '';
+            stay.checkIn = cardEl.querySelector('[name="checkIn"]')?.value || '';
+            const nightsVal = cardEl.querySelector('[name="nights"]')?.value;
+            stay.nights = nightsVal ? parseInt(nightsVal, 10) : 1;
+            stay.status = cardEl.querySelector('[name="status"]')?.value || 'unknown';
+            stay.notes = cardEl.querySelector('[name="notes"]')?.value || '';
+          },
+          onUpdate: () => {
+            onSave();
+            const countSpan = groupEl.querySelector('.collapsible-section-count');
+            if (countSpan) countSpan.textContent = `(${trek.stays.length})`;
+            const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+            const stillWarn = trek.stays.some((s) => s.status !== 'confirmed') || (!trek.noOffTrailStays && trek.stays.length === 0);
+            if (warnSpan) warnSpan.hidden = !stillWarn;
+          },
+        });
+      },
+    });
+
+    groupsContainer.appendChild(groupEl);
+  }
+
+  render();
 }
 
 // Renders and binds the Trek days list section with auto day-numbering and prefilled date.
@@ -769,12 +987,13 @@ function renderGearSection(container, trek, onSave) {
 
   // Ensure all existing items have a normalized category key
   trek.gear.forEach((g) => {
-    g.category = normalizeGearCategory(g.category);
+    g.category = normalizeGearCategory(g.category, g.item);
   });
 
-  // In-memory UI state
-  const collapsedSections = new Set(); // tracks category keys user explicitly collapsed (default: all expanded)
+  // In-memory UI state: all sections start collapsed by default
+  const openSections = new Set();
   const expandedCardIds = new Set();   // tracks gear item ids currently in edit mode
+  let isAddingTopItem = false;
   let suppliesNote = { text: '', hidden: true };
 
   const isGearItemEmpty = (g) =>
@@ -785,7 +1004,7 @@ function renderGearSection(container, trek, onSave) {
   const readCardFields = (cardEl, item) => {
     if (!cardEl || !item) return;
     item.item = cardEl.querySelector('[name="item"]')?.value || '';
-    item.category = normalizeGearCategory(cardEl.querySelector('[name="category"]')?.value || item.category);
+    item.category = normalizeGearCategory(cardEl.querySelector('[name="category"]')?.value || item.category, item.item);
     item.source = cardEl.querySelector('[name="source"]')?.value || SOURCES.HAVE;
     item.packed = Boolean(cardEl.querySelector('[name="packed"]')?.checked);
   };
@@ -818,6 +1037,7 @@ function renderGearSection(container, trek, onSave) {
   const addCommonSupplies = () => {
     readAllExpandedCards();
     cleanupEmptyItems();
+    isAddingTopItem = false;
     const existingNames = new Set(trek.gear.map((g) => (g.item || '').trim().toLowerCase()));
     let addedCount = 0;
     for (const supply of COMMON_FIRST_AID_SUPPLIES) {
@@ -846,7 +1066,7 @@ function renderGearSection(container, trek, onSave) {
       };
     }
 
-    collapsedSections.delete('first_aid'); // ensure first_aid section is expanded
+    openSections.add('first_aid'); // ensure first_aid section is expanded
     onSave();
     render();
   };
@@ -864,140 +1084,238 @@ function renderGearSection(container, trek, onSave) {
     counterBox.textContent = `${packedCount} of ${totalCount} packed`;
     container.appendChild(counterBox);
 
+    const isFirstAidEmpty = !trek.gear.some((g) => normalizeGearCategory(g.category, g.item) === 'first_aid');
+
+    // Top actions area: "+ Add item" button or form
+    const topActionsArea = document.createElement('div');
+    topActionsArea.className = 'gear-top-actions-area';
+
+    if (isAddingTopItem) {
+      const topAddCard = document.createElement('div');
+      topAddCard.className = 'list-card gear-top-add-card';
+
+      const catOptionsHtml = Object.entries(GEAR_CATEGORIES)
+        .map(([k, label]) => `<option value="${k}" ${k === 'other' ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+        .join('');
+
+      topAddCard.innerHTML = `
+        <div class="list-card-body">
+          <div class="form-group">
+            <label class="form-label" for="gear-top-item-input">Item</label>
+            <input type="text" id="gear-top-item-input" name="item" class="text-input" placeholder="e.g. Sleeping bag" autofocus />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="gear-top-category-select">Category</label>
+              <select id="gear-top-category-select" name="category" class="text-input" required>
+                ${catOptionsHtml}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="gear-top-source-select">Source</label>
+              <select id="gear-top-source-select" name="source" class="text-input">
+                <option value="${SOURCES.HAVE}" selected>Have</option>
+                <option value="${SOURCES.BORROW}">Borrow</option>
+                <option value="${SOURCES.BUY}">Buy</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label" for="gear-top-packed-cb">
+              <input type="checkbox" id="gear-top-packed-cb" name="packed" />
+              <span>Packed</span>
+            </label>
+          </div>
+
+          <div class="list-card-footer-buttons">
+            <button type="button" class="btn btn-secondary btn-cancel-top-add">Cancel</button>
+            <button type="button" class="btn btn-primary btn-done-top-add">Done</button>
+          </div>
+        </div>
+      `;
+
+      const itemInput = topAddCard.querySelector('#gear-top-item-input');
+      const catSelect = topAddCard.querySelector('#gear-top-category-select');
+      const srcSelect = topAddCard.querySelector('#gear-top-source-select');
+      const packedCb = topAddCard.querySelector('#gear-top-packed-cb');
+      const btnCancel = topAddCard.querySelector('.btn-cancel-top-add');
+      const btnDone = topAddCard.querySelector('.btn-done-top-add');
+
+      const saveTopItem = () => {
+        const name = (itemInput?.value || '').trim();
+        if (!name) {
+          isAddingTopItem = false;
+          render();
+          return;
+        }
+
+        const chosenCat = normalizeGearCategory(catSelect?.value || 'other', name);
+        const newItem = {
+          id: crypto.randomUUID(),
+          item: name,
+          category: chosenCat,
+          source: srcSelect?.value || SOURCES.HAVE,
+          packed: Boolean(packedCb?.checked),
+        };
+        trek.gear.push(newItem);
+        openSections.add(chosenCat);
+        isAddingTopItem = false;
+        onSave();
+        render();
+      };
+
+      btnCancel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        isAddingTopItem = false;
+        render();
+      });
+
+      btnDone.addEventListener('click', (e) => {
+        e.stopPropagation();
+        saveTopItem();
+      });
+
+      itemInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveTopItem();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          isAddingTopItem = false;
+          render();
+        }
+      });
+
+      topActionsArea.appendChild(topAddCard);
+
+      setTimeout(() => {
+        itemInput?.focus();
+      }, 50);
+    } else {
+      const btnAddTop = document.createElement('button');
+      btnAddTop.type = 'button';
+      btnAddTop.id = 'btn-gear-add-top';
+      btnAddTop.className = 'btn btn-add btn-block btn-gear-add-top';
+      btnAddTop.textContent = '+ Add item';
+      btnAddTop.addEventListener('click', () => {
+        readAllExpandedCards();
+        cleanupEmptyItems();
+        expandedCardIds.clear();
+        isAddingTopItem = true;
+        render();
+      });
+      topActionsArea.appendChild(btnAddTop);
+
+      // If First aid is empty, show small button below "+ Add item"
+      if (isFirstAidEmpty) {
+        const helperWrap = document.createElement('div');
+        helperWrap.className = 'gear-first-aid-top-wrap';
+        helperWrap.innerHTML = `
+          <button type="button" id="btn-add-first-aid-top" class="btn btn-secondary btn-first-aid-top">Add common first-aid supplies</button>
+          <div id="gear-supplies-note" class="gear-supplies-note" role="status" aria-live="polite" ${suppliesNote.hidden ? 'hidden' : ''}>${escapeHtml(suppliesNote.text)}</div>
+        `;
+        helperWrap.querySelector('#btn-add-first-aid-top').addEventListener('click', () => {
+          addCommonSupplies();
+        });
+        topActionsArea.appendChild(helperWrap);
+      }
+    }
+
+    container.appendChild(topActionsArea);
+
     // Group items by category in GEAR_CATEGORIES order
     const categoryKeys = Object.keys(GEAR_CATEGORIES);
     const visibleSections = [];
-    const emptyCategories = [];
 
     categoryKeys.forEach((catKey) => {
-      const items = trek.gear.filter((g) => g.category === catKey);
+      const items = trek.gear.filter((g) => normalizeGearCategory(g.category, g.item) === catKey);
       if (items.length > 0) {
         visibleSections.push({ catKey, items });
-      } else if (catKey !== 'gemma') {
-        emptyCategories.push(catKey);
       }
     });
 
-    const isFirstAidEmpty = !trek.gear.some((g) => g.category === 'first_aid');
-
     const sectionsWrapper = document.createElement('div');
-    sectionsWrapper.className = 'gear-sections-wrapper';
+    sectionsWrapper.className = 'gear-sections-wrapper collapsible-sections-wrapper';
 
     // If no sections have items at all, show empty hint
     if (visibleSections.length === 0) {
       const emptyHint = document.createElement('div');
       emptyHint.className = 'list-editor-empty-hint';
-      emptyHint.textContent = 'No gear items recorded yet.';
+      emptyHint.textContent = 'No gear added yet.';
       sectionsWrapper.appendChild(emptyHint);
     }
 
-    // Render each visible section
+    // Render each category section
     visibleSections.forEach(({ catKey, items }) => {
       const catLabel = GEAR_CATEGORIES[catKey];
       const secPacked = items.filter((g) => g.packed).length;
       const secTotal = items.length;
-      const isCollapsed = collapsedSections.has(catKey);
+      const isOpen = openSections.has(catKey);
+      const countText = secTotal > 0 ? `(${secPacked}/${secTotal})` : '(0)';
+      const hasWarning = items.some((g) => g.source === SOURCES.BORROW || g.source === SOURCES.BUY || !g.packed);
 
-      const sectionGroup = document.createElement('div');
-      sectionGroup.className = 'gear-section-group';
-      sectionGroup.dataset.category = catKey;
-
-      // Section Header
-      const headerEl = document.createElement('div');
-      headerEl.className = 'gear-section-header';
-      headerEl.setAttribute('role', 'button');
-      headerEl.setAttribute('tabindex', '0');
-      headerEl.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
-      headerEl.setAttribute('aria-label', `${isCollapsed ? 'Expand' : 'Collapse'} ${catLabel} section`);
-
-      headerEl.innerHTML = `
-        <div class="gear-section-header-left">
-          <span class="gear-section-toggle-icon" aria-hidden="true">${isCollapsed ? '▸' : '▾'}</span>
-          <span class="gear-section-title">${escapeHtml(catLabel)}</span>
-          <span class="gear-section-count">(${secPacked}/${secTotal})</span>
-        </div>
-        <div class="gear-section-header-right">
-          <button type="button" class="btn btn-add btn-sm btn-gear-section-add" data-category="${catKey}" aria-label="Add item to ${escapeHtml(catLabel)}">+ Add</button>
-        </div>
-      `;
-
-      // Header click toggles collapse/expand (unless clicking the + Add button)
-      headerEl.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
-        if (isCollapsed) {
-          collapsedSections.delete(catKey);
-        } else {
-          collapsedSections.add(catKey);
-        }
-        render();
-      });
-
-      headerEl.addEventListener('keydown', (e) => {
-        if (e.target === headerEl && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          if (isCollapsed) {
-            collapsedSections.delete(catKey);
+      const sectionGroup = createCollapsibleSectionGroup({
+        key: catKey,
+        title: catLabel,
+        countText,
+        hasWarning,
+        isOpen,
+        addLabel: '+ Add',
+        onToggle: () => {
+          if (openSections.has(catKey)) {
+            openSections.delete(catKey);
           } else {
-            collapsedSections.add(catKey);
+            openSections.add(catKey);
           }
           render();
-        }
-      });
+        },
+        onAdd: () => {
+          readAllExpandedCards();
+          cleanupEmptyItems();
+          expandedCardIds.clear();
+          isAddingTopItem = false;
 
-      // + Add button inside section header
-      const btnAddInSection = headerEl.querySelector('.btn-gear-section-add');
-      btnAddInSection.addEventListener('click', (e) => {
-        e.stopPropagation();
-        readAllExpandedCards();
-        cleanupEmptyItems();
-        expandedCardIds.clear();
+          const newItem = {
+            id: crypto.randomUUID(),
+            item: '',
+            category: catKey,
+            source: SOURCES.HAVE,
+            packed: false,
+          };
+          trek.gear.push(newItem);
+          expandedCardIds.add(newItem.id);
+          openSections.add(catKey);
+          onSave();
+          render();
 
-        const newItem = {
-          id: crypto.randomUUID(),
-          item: '',
-          category: catKey,
-          source: SOURCES.HAVE,
-          packed: false,
-        };
-        trek.gear.push(newItem);
-        expandedCardIds.add(newItem.id);
-        collapsedSections.delete(catKey);
-        onSave();
-        render();
+          setTimeout(() => {
+            const cardEl = container.querySelector(`[data-id="${newItem.id}"]`);
+            cardEl?.querySelector('input[name="item"]')?.focus();
+          }, 50);
+        },
+        renderBody: (bodyEl) => {
+          // "Add common first-aid supplies" button inside First aid section when expanded
+          if (catKey === 'first_aid') {
+            const helperWrap = document.createElement('div');
+            helperWrap.className = 'gear-supplies-helper';
+            helperWrap.innerHTML = `
+              <button type="button" id="btn-add-first-aid-supplies" class="btn btn-add btn-block btn-add-first-aid-supplies">Add common first-aid supplies</button>
+              <div id="gear-supplies-note" class="gear-supplies-note" role="status" aria-live="polite" ${suppliesNote.hidden ? 'hidden' : ''}>${escapeHtml(suppliesNote.text)}</div>
+            `;
+            helperWrap.querySelector('#btn-add-first-aid-supplies').addEventListener('click', (e) => {
+              e.stopPropagation();
+              addCommonSupplies();
+            });
+            bodyEl.appendChild(helperWrap);
+          }
 
-        setTimeout(() => {
-          const cardEl = container.querySelector(`[data-id="${newItem.id}"]`);
-          cardEl?.querySelector('input[name="item"]')?.focus();
-        }, 50);
-      });
+          // Cards list
+          const cardsWrap = document.createElement('div');
+          cardsWrap.className = 'gear-cards-list';
 
-      sectionGroup.appendChild(headerEl);
-
-      // Section Body (cards + first-aid helper if first_aid)
-      if (!isCollapsed) {
-        const bodyEl = document.createElement('div');
-        bodyEl.className = 'gear-section-body';
-
-        // "Add common first-aid supplies" button inside First aid section
-        if (catKey === 'first_aid') {
-          const helperWrap = document.createElement('div');
-          helperWrap.className = 'gear-supplies-helper';
-          helperWrap.innerHTML = `
-            <button type="button" id="btn-add-first-aid-supplies" class="btn btn-add btn-block btn-add-first-aid-supplies">Add common first-aid supplies</button>
-            <div id="gear-supplies-note" class="gear-supplies-note" role="status" aria-live="polite" ${suppliesNote.hidden ? 'hidden' : ''}>${escapeHtml(suppliesNote.text)}</div>
-          `;
-          helperWrap.querySelector('#btn-add-first-aid-supplies').addEventListener('click', (e) => {
-            e.stopPropagation();
-            addCommonSupplies();
-          });
-          bodyEl.appendChild(helperWrap);
-        }
-
-        // Cards list
-        const cardsWrap = document.createElement('div');
-        cardsWrap.className = 'gear-cards-list';
-
-        items.forEach((item, index) => {
+          items.forEach((item, index) => {
           const isCardExpanded = expandedCardIds.has(item.id);
           const title = item.item?.trim() || `Gear item ${index + 1} (no item name)`;
           const subtitle = item.source ? `Source: ${item.source}` : '';
@@ -1094,8 +1412,7 @@ function renderGearSection(container, trek, onSave) {
           } else {
             // Expanded Card
             const catOptionsHtml = Object.entries(GEAR_CATEGORIES)
-              .filter(([k]) => k !== 'gemma' || item.category === 'gemma')
-              .map(([k, label]) => `<option value="${k}" ${item.category === k ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+              .map(([k, label]) => `<option value="${k}" ${normalizeGearCategory(item.category, item.item) === k ? 'selected' : ''}>${escapeHtml(label)}</option>`)
               .join('');
 
             card.innerHTML = `
@@ -1190,9 +1507,9 @@ function renderGearSection(container, trek, onSave) {
             // Category select change: moves the item to the new section!
             categorySelect.addEventListener('change', () => {
               readCardFields(card, item);
-              const newCategory = categorySelect.value;
+              const newCategory = normalizeGearCategory(categorySelect.value, item.item);
               item.category = newCategory;
-              collapsedSections.delete(newCategory); // ensure target section is open
+              openSections.add(newCategory); // ensure target section is open
               onSave();
               render();
 
@@ -1226,85 +1543,31 @@ function renderGearSection(container, trek, onSave) {
         });
 
         bodyEl.appendChild(cardsWrap);
-        sectionGroup.appendChild(bodyEl);
-      }
-
-      sectionsWrapper.appendChild(sectionGroup);
+      },
     });
 
-    // Row below visible sections: "Add to another section:"
-    const otherSectionRow = document.createElement('div');
-    otherSectionRow.className = 'gear-add-other-section-row';
+    sectionsWrapper.appendChild(sectionGroup);
+  });
 
-    let otherRowHtml = '';
-    if (emptyCategories.length > 0) {
-      otherRowHtml += `
-        <div class="gear-add-other-controls-wrap">
-          <label for="gear-other-section-select" class="form-label">Add to another section:</label>
-          <div class="gear-add-other-controls">
-            <select id="gear-other-section-select" class="text-input" aria-label="Select empty section to add item to">
-              ${emptyCategories.map((k) => `<option value="${k}">${escapeHtml(GEAR_CATEGORIES[k])}</option>`).join('')}
-            </select>
-            <button type="button" id="btn-add-other-section" class="btn btn-add">+ Add</button>
-          </div>
-        </div>
-      `;
-    }
-
-    if (isFirstAidEmpty) {
-      otherRowHtml += `
-        <div class="gear-other-first-aid-wrap">
-          <button type="button" id="btn-add-first-aid-supplies" class="btn btn-add btn-block btn-add-first-aid-supplies">Add common first-aid supplies</button>
-          <div id="gear-supplies-note" class="gear-supplies-note" role="status" aria-live="polite" ${suppliesNote.hidden ? 'hidden' : ''}>${escapeHtml(suppliesNote.text)}</div>
-        </div>
-      `;
-    }
-
-    otherSectionRow.innerHTML = otherRowHtml;
-
-    const btnAddOther = otherSectionRow.querySelector('#btn-add-other-section');
-    if (btnAddOther) {
-      btnAddOther.addEventListener('click', () => {
-        const selectEl = otherSectionRow.querySelector('#gear-other-section-select');
-        const selectedCat = selectEl?.value || emptyCategories[0];
-        if (!selectedCat) return;
-
-        readAllExpandedCards();
-        cleanupEmptyItems();
-        expandedCardIds.clear();
-
-        const newItem = {
-          id: crypto.randomUUID(),
-          item: '',
-          category: selectedCat,
-          source: SOURCES.HAVE,
-          packed: false,
-        };
-        trek.gear.push(newItem);
-        expandedCardIds.add(newItem.id);
-        collapsedSections.delete(selectedCat);
-        onSave();
-        render();
-
-        setTimeout(() => {
-          const cardEl = container.querySelector(`[data-id="${newItem.id}"]`);
-          cardEl?.querySelector('input[name="item"]')?.focus();
-        }, 50);
-      });
-    }
-
-    const btnSuppliesEmpty = otherSectionRow.querySelector('.btn-add-first-aid-supplies');
-    if (btnSuppliesEmpty) {
-      btnSuppliesEmpty.addEventListener('click', () => {
-        addCommonSupplies();
-      });
-    }
-
-    sectionsWrapper.appendChild(otherSectionRow);
-    container.appendChild(sectionsWrapper);
-  }
+  container.appendChild(sectionsWrapper);
+}
 
   render();
+}
+
+const FOOD_GROUPS = [
+  { key: 'breakfast', label: 'Breakfast', defaultMeal: 'Breakfast' },
+  { key: 'lunch', label: 'Lunch', defaultMeal: 'Lunch' },
+  { key: 'dinner', label: 'Dinner', defaultMeal: 'Dinner' },
+  { key: 'snacks_other', label: 'Snacks & other', defaultMeal: 'Snack' },
+];
+
+function getFoodGroupKey(f) {
+  const m = (f?.meal || '').toLowerCase().trim();
+  if (m.includes('break')) return 'breakfast';
+  if (m.includes('lunch')) return 'lunch';
+  if (m.includes('dinner')) return 'dinner';
+  return 'snacks_other';
 }
 
 // Renders and binds the Food & ration section including items list and resupply points textarea.
@@ -1323,126 +1586,214 @@ function renderFoodSection(container, trek, onSave) {
     }
   });
 
-  container.innerHTML = `
-    <div id="food-counter-box" class="gear-counter-container"></div>
-    <div id="food-list-container"></div>
-    <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
-      <label for="food-resupply" class="form-label">Resupply points</label>
-      <textarea id="food-resupply" class="text-input" rows="3" placeholder="Towns, villages, or shops along the route to buy rations...">${escapeHtml(trek.food.resupply || '')}</textarea>
-    </div>
-  `;
+  // In-memory UI state: starts collapsed by default
+  const openSections = new Set();
+  const foodEditors = new Map();
 
-  const counterBox = container.querySelector('#food-counter-box');
-  const updateCounter = () => {
-    const total = trek.food.items.length;
-    const packed = trek.food.items.filter((f) => f.packed).length;
-    counterBox.textContent = `${packed} of ${total} packed`;
-  };
-
-  updateCounter();
-
-  const resupplyEl = container.querySelector('#food-resupply');
-  const handler = () => {
-    trek.food.resupply = resupplyEl.value;
-    onSave();
-  };
-  resupplyEl.addEventListener('input', handler);
-  resupplyEl.addEventListener('change', handler);
-
-  const listContainer = container.querySelector('#food-list-container');
-  mountListEditor(listContainer, {
-    items: trek.food.items,
-    emptyHint: 'No food items recorded yet.',
-    addLabel: '+ Add food item',
-    getItemTitle: (f, idx) => {
-      const dayPrefix = f.day && f.day.trim() ? `${f.day.trim()}: ` : '';
-      const mealSuffix = f.meal && f.meal.trim() ? ` (${f.meal.trim()})` : '';
-      return (f.item && f.item.trim())
-        ? `${dayPrefix}${f.item.trim()}${mealSuffix}`
-        : `Food item ${idx + 1} (no item name)`;
-    },
-    getItemSubtitle: (f) => (f.quantity ? `Qty: ${f.quantity}` : ''),
-    renderCollapsedActions: (f) => `
-      <div class="gear-packed-wrapper">
-        <label class="gear-packed-label" title="Toggle packed">
-          <input type="checkbox" class="food-packed-cb" ${f.packed ? 'checked' : ''} aria-label="Mark packed" />
-          <span>Packed</span>
-        </label>
+  function render() {
+    container.innerHTML = `
+      <div id="food-counter-box" class="gear-counter-container"></div>
+      <div id="food-groups-container" class="food-sections-wrapper collapsible-sections-wrapper"></div>
+      <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+        <label for="food-resupply" class="form-label">Resupply points</label>
+        <textarea id="food-resupply" class="text-input" rows="3" placeholder="Towns, villages, or shops along the route to buy rations...">${escapeHtml(trek.food.resupply || '')}</textarea>
       </div>
-    `,
-    onBindCollapsed: (cardEl, f, rerender) => {
-      cardEl.classList.toggle('card-packed', Boolean(f.packed));
-      const cb = cardEl.querySelector('.food-packed-cb');
-      if (cb) {
-        cb.addEventListener('click', (e) => e.stopPropagation());
-        cb.addEventListener('change', (e) => {
-          e.stopPropagation();
-          f.packed = cb.checked;
-          delete f.status;
-          cardEl.classList.toggle('card-packed', f.packed);
-          updateCounter();
-          onSave();
-        });
-      }
-    },
-    createDefaultItem: () => ({
-      id: crypto.randomUUID(),
-      day: '',
-      meal: '',
-      item: '',
-      quantity: '',
-      packed: false,
-    }),
-    isItemEmpty: (f) =>
-      !f.day?.trim() &&
-      !f.meal?.trim() &&
-      !f.item?.trim() &&
-      !f.quantity?.trim() &&
-      !f.packed,
-    renderItemFields: (f) => `
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Day</label>
-          <input type="text" name="day" class="text-input" value="${escapeHtml(f.day || '')}" placeholder="e.g. Day 1, or All days" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Meal</label>
-          <input type="text" name="meal" class="text-input" value="${escapeHtml(f.meal || '')}" placeholder="Breakfast, Lunch, Dinner, Snack" />
-        </div>
-      </div>
+    `;
 
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Item</label>
-          <input type="text" name="item" class="text-input" value="${escapeHtml(f.item || '')}" placeholder="e.g. Oats, Maggi, Nuts" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Quantity</label>
-          <input type="text" name="quantity" class="text-input" value="${escapeHtml(f.quantity || '')}" placeholder="e.g. 500g, 4 bars" />
-        </div>
-      </div>
+    const counterBox = container.querySelector('#food-counter-box');
+    const updateCounter = () => {
+      const total = trek.food.items.length;
+      const packed = trek.food.items.filter((f) => f.packed).length;
+      counterBox.textContent = `${packed} of ${total} packed`;
+    };
+    updateCounter();
 
-      <div class="form-group">
-        <label class="checkbox-label" for="food-field-packed-${escapeHtml(f.id)}">
-          <input type="checkbox" id="food-field-packed-${escapeHtml(f.id)}" name="packed" ${f.packed ? 'checked' : ''} />
-          <span>Packed</span>
-        </label>
-      </div>
-    `,
-    readItemFields: (cardEl, f) => {
-      f.day = cardEl.querySelector('[name="day"]')?.value || '';
-      f.meal = cardEl.querySelector('[name="meal"]')?.value || '';
-      f.item = cardEl.querySelector('[name="item"]')?.value || '';
-      f.quantity = cardEl.querySelector('[name="quantity"]')?.value || '';
-      f.packed = Boolean(cardEl.querySelector('[name="packed"]')?.checked);
-      delete f.status;
-      updateCounter();
-    },
-    onUpdate: () => {
-      updateCounter();
+    const resupplyEl = container.querySelector('#food-resupply');
+    const resupplyHandler = () => {
+      trek.food.resupply = resupplyEl.value;
       onSave();
-    },
-  });
+    };
+    resupplyEl.addEventListener('input', resupplyHandler);
+    resupplyEl.addEventListener('change', resupplyHandler);
+
+    const groupsContainer = container.querySelector('#food-groups-container');
+
+    FOOD_GROUPS.forEach((group) => {
+      const groupItems = trek.food.items.filter((f) => getFoodGroupKey(f) === group.key);
+      const secPacked = groupItems.filter((f) => f.packed).length;
+      const secTotal = groupItems.length;
+      const countText = secTotal > 0 ? `(${secPacked}/${secTotal})` : '(0)';
+      const hasWarning = groupItems.some((f) => !f.packed);
+      const isOpen = openSections.has(group.key);
+
+      const groupEl = createCollapsibleSectionGroup({
+        key: group.key,
+        title: group.label,
+        countText,
+        hasWarning,
+        isOpen,
+        addLabel: '+ Add',
+        onToggle: () => {
+          if (openSections.has(group.key)) {
+            openSections.delete(group.key);
+            foodEditors.delete(group.key);
+          } else {
+            openSections.add(group.key);
+          }
+          render();
+        },
+        onAdd: () => {
+          if (!openSections.has(group.key)) {
+            openSections.add(group.key);
+            render();
+          }
+          const ed = foodEditors.get(group.key);
+          if (ed) {
+            ed.addItem();
+          }
+        },
+        renderBody: (bodyEl) => {
+          const editor = mountListEditor(bodyEl, {
+            items: groupItems,
+            emptyHint: `No ${group.label.toLowerCase()} items recorded yet.`,
+            addLabel: '',
+            getItemTitle: (f, idx) => {
+              const dayPrefix = f.day && f.day.trim() ? `${f.day.trim()}: ` : '';
+              const mealSuffix = f.meal && f.meal.trim() ? ` (${f.meal.trim()})` : '';
+              return (f.item && f.item.trim())
+                ? `${dayPrefix}${f.item.trim()}${mealSuffix}`
+                : `Food item ${idx + 1} (no item name)`;
+            },
+            getItemSubtitle: (f) => (f.quantity ? `Qty: ${f.quantity}` : ''),
+            renderCollapsedActions: (f) => `
+              <div class="gear-packed-wrapper">
+                <label class="gear-packed-label" title="Toggle packed">
+                  <input type="checkbox" class="food-packed-cb" ${f.packed ? 'checked' : ''} aria-label="Mark packed" />
+                  <span>Packed</span>
+                </label>
+              </div>
+            `,
+            onBindCollapsed: (cardEl, f) => {
+              cardEl.classList.toggle('card-packed', Boolean(f.packed));
+              const cb = cardEl.querySelector('.food-packed-cb');
+              if (cb) {
+                cb.addEventListener('click', (e) => e.stopPropagation());
+                cb.addEventListener('change', (e) => {
+                  e.stopPropagation();
+                  f.packed = cb.checked;
+                  delete f.status;
+                  cardEl.classList.toggle('card-packed', f.packed);
+                  updateCounter();
+                  onSave();
+                  // Update group count and warning
+                  const curPacked = groupItems.filter((it) => it.packed).length;
+                  const curTotal = groupItems.length;
+                  const countSpan = groupEl.querySelector('.collapsible-section-count');
+                  if (countSpan) countSpan.textContent = curTotal > 0 ? `(${curPacked}/${curTotal})` : '(0)';
+                  const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+                  const stillWarn = groupItems.some((it) => !it.packed);
+                  if (warnSpan) warnSpan.hidden = !stillWarn;
+                });
+              }
+            },
+            createDefaultItem: () => {
+              const newItem = {
+                id: crypto.randomUUID(),
+                day: '',
+                meal: group.defaultMeal,
+                item: '',
+                quantity: '',
+                packed: false,
+              };
+              trek.food.items.push(newItem);
+              return newItem;
+            },
+            isItemEmpty: (f) =>
+              !f.day?.trim() &&
+              !f.meal?.trim() &&
+              !f.item?.trim() &&
+              !f.quantity?.trim() &&
+              !f.packed,
+            onAfterDelete: () => {
+              const groupItemIds = new Set(groupItems.map((f) => f.id));
+              trek.food.items = trek.food.items.filter((f) => {
+                if (getFoodGroupKey(f) === group.key) {
+                  return groupItemIds.has(f.id);
+                }
+                return true;
+              });
+              updateCounter();
+              onSave();
+              const curPacked = groupItems.filter((it) => it.packed).length;
+              const curTotal = groupItems.length;
+              const countSpan = groupEl.querySelector('.collapsible-section-count');
+              if (countSpan) countSpan.textContent = curTotal > 0 ? `(${curPacked}/${curTotal})` : '(0)';
+              const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+              const stillWarn = groupItems.some((it) => !it.packed);
+              if (warnSpan) warnSpan.hidden = !stillWarn;
+            },
+            renderItemFields: (f) => `
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Day</label>
+                  <input type="text" name="day" class="text-input" value="${escapeHtml(f.day || '')}" placeholder="e.g. Day 1, or All days" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Meal</label>
+                  <input type="text" name="meal" class="text-input" value="${escapeHtml(f.meal || '')}" placeholder="Breakfast, Lunch, Dinner, Snack" />
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Item</label>
+                  <input type="text" name="item" class="text-input" value="${escapeHtml(f.item || '')}" placeholder="e.g. Oats, Maggi, Nuts" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Quantity</label>
+                  <input type="text" name="quantity" class="text-input" value="${escapeHtml(f.quantity || '')}" placeholder="e.g. 500g, 4 bars" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="checkbox-label" for="food-field-packed-${escapeHtml(f.id)}">
+                  <input type="checkbox" id="food-field-packed-${escapeHtml(f.id)}" name="packed" ${f.packed ? 'checked' : ''} />
+                  <span>Packed</span>
+                </label>
+              </div>
+            `,
+            readItemFields: (cardEl, f) => {
+              f.day = cardEl.querySelector('[name="day"]')?.value || '';
+              f.meal = cardEl.querySelector('[name="meal"]')?.value || '';
+              f.item = cardEl.querySelector('[name="item"]')?.value || '';
+              f.quantity = cardEl.querySelector('[name="quantity"]')?.value || '';
+              f.packed = Boolean(cardEl.querySelector('[name="packed"]')?.checked);
+              delete f.status;
+            },
+            onUpdate: () => {
+              const groupItemIds = new Set(groupItems.map((f) => f.id));
+              const otherItems = trek.food.items.filter((f) => getFoodGroupKey(f) !== group.key && !groupItemIds.has(f.id));
+              trek.food.items = [...otherItems, ...groupItems];
+              updateCounter();
+              onSave();
+              const curPacked = groupItems.filter((it) => it.packed).length;
+              const curTotal = groupItems.length;
+              const countSpan = groupEl.querySelector('.collapsible-section-count');
+              if (countSpan) countSpan.textContent = curTotal > 0 ? `(${curPacked}/${curTotal})` : '(0)';
+              const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+              const stillWarn = groupItems.some((it) => !it.packed);
+              if (warnSpan) warnSpan.hidden = !stillWarn;
+            },
+          });
+          foodEditors.set(group.key, editor);
+        },
+      });
+
+      groupsContainer.appendChild(groupEl);
+    });
+  }
+
+  render();
 }
 
 // Renders and binds the redesigned Safety section with 5 blocks and share action.
@@ -1562,9 +1913,8 @@ function renderSafetySection(container, trek, onSave) {
 
     <!-- 2. Emergency contacts -->
     <div class="safety-block">
-      <h3 class="safety-subheading">Emergency contacts</h3>
-      <div class="safety-hint">People to call when something goes wrong, including local help.</div>
-      <div id="safety-contacts-container"></div>
+      <div class="safety-hint" style="margin-bottom: 8px;">People to call when something goes wrong, including local help.</div>
+      <div id="safety-contacts-container" class="collapsible-sections-wrapper"></div>
     </div>
 
     <!-- 3. Carrying? checklist -->
@@ -1662,54 +2012,104 @@ function renderSafetySection(container, trek, onSave) {
   });
   tpItineraryCb.addEventListener('change', tpHandler);
 
-  // Mount emergency contacts list
+  // Mount emergency contacts list as collapsible section
   const contactsContainer = container.querySelector('#safety-contacts-container');
-  mountListEditor(contactsContainer, {
-    items: trek.safety.contacts,
-    emptyHint: 'No emergency contacts recorded yet.',
-    addLabel: '+ Add emergency contact',
-    getItemTitle: (c, idx) => (c.name && c.name.trim() ? c.name.trim() : `Contact ${idx + 1} (no name entered)`),
-    getItemSubtitle: (c) => CONTACT_ROLE_LABELS[c.role] || CONTACT_ROLE_LABELS[CONTACT_ROLES.FAMILY],
-    getItemChips: (c) => {
-      if (!c.phone?.trim()) return '';
-      const cleanPhone = c.phone.replace(/\s+/g, '');
-      return `<a href="tel:${escapeHtml(cleanPhone)}" class="contact-call-link" onclick="event.stopPropagation()">📞 ${escapeHtml(c.phone.trim())}</a>`;
-    },
-    createDefaultItem: () => ({
-      id: crypto.randomUUID(),
-      name: '',
-      role: CONTACT_ROLES.FAMILY,
-      phone: '',
-    }),
-    isItemEmpty: (c) => !c.name?.trim() && !c.phone?.trim(),
-    renderItemFields: (c) => `
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Contact name</label>
-          <input type="text" name="name" class="text-input" value="${escapeHtml(c.name || '')}" placeholder="Full name or agency" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Role</label>
-          <select name="role" class="text-input">
-            <option value="${CONTACT_ROLES.FAMILY}" ${c.role === CONTACT_ROLES.FAMILY ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.FAMILY]}</option>
-            <option value="${CONTACT_ROLES.LOCAL_HELP}" ${c.role === CONTACT_ROLES.LOCAL_HELP ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.LOCAL_HELP]}</option>
-            <option value="${CONTACT_ROLES.GUIDE}" ${c.role === CONTACT_ROLES.GUIDE ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.GUIDE]}</option>
-            <option value="${CONTACT_ROLES.OTHER}" ${c.role === CONTACT_ROLES.OTHER ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.OTHER]}</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Phone</label>
-        <input type="tel" name="phone" class="text-input" value="${escapeHtml(c.phone || '')}" placeholder="+91 ..." />
-      </div>
-    `,
-    readItemFields: (cardEl, c) => {
-      c.name = cardEl.querySelector('[name="name"]')?.value || '';
-      c.role = cardEl.querySelector('[name="role"]')?.value || CONTACT_ROLES.FAMILY;
-      c.phone = cardEl.querySelector('[name="phone"]')?.value || '';
-    },
-    onUpdate: onSave,
-  });
+  const openSections = new Set();
+  let contactsEditor = null;
+
+  function renderContactsGroup() {
+    contactsContainer.innerHTML = '';
+    const count = trek.safety.contacts.length;
+    const countText = `(${count})`;
+    const hasWarning = count === 0 || trek.safety.contacts.some((c) => !c.name?.trim() || !c.phone?.trim());
+    const isOpen = openSections.has('contacts');
+
+    const groupEl = createCollapsibleSectionGroup({
+      key: 'contacts',
+      title: 'Emergency contacts',
+      countText,
+      hasWarning,
+      isOpen,
+      addLabel: '+ Add',
+      onToggle: () => {
+        if (openSections.has('contacts')) {
+          openSections.delete('contacts');
+          contactsEditor = null;
+        } else {
+          openSections.add('contacts');
+        }
+        renderContactsGroup();
+      },
+      onAdd: () => {
+        if (!openSections.has('contacts')) {
+          openSections.add('contacts');
+          renderContactsGroup();
+        }
+        if (contactsEditor) {
+          contactsEditor.addItem();
+        }
+      },
+      renderBody: (bodyEl) => {
+        contactsEditor = mountListEditor(bodyEl, {
+          items: trek.safety.contacts,
+          emptyHint: 'No emergency contacts recorded yet.',
+          addLabel: '',
+          getItemTitle: (c, idx) => (c.name && c.name.trim() ? c.name.trim() : `Contact ${idx + 1} (no name entered)`),
+          getItemSubtitle: (c) => CONTACT_ROLE_LABELS[c.role] || CONTACT_ROLE_LABELS[CONTACT_ROLES.FAMILY],
+          getItemChips: (c) => {
+            if (!c.phone?.trim()) return '';
+            const cleanPhone = c.phone.replace(/\s+/g, '');
+            return `<a href="tel:${escapeHtml(cleanPhone)}" class="contact-call-link" onclick="event.stopPropagation()">📞 ${escapeHtml(c.phone.trim())}</a>`;
+          },
+          createDefaultItem: () => ({
+            id: crypto.randomUUID(),
+            name: '',
+            role: CONTACT_ROLES.FAMILY,
+            phone: '',
+          }),
+          isItemEmpty: (c) => !c.name?.trim() && !c.phone?.trim(),
+          renderItemFields: (c) => `
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Contact name</label>
+                <input type="text" name="name" class="text-input" value="${escapeHtml(c.name || '')}" placeholder="Full name or agency" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Role</label>
+                <select name="role" class="text-input">
+                  <option value="${CONTACT_ROLES.FAMILY}" ${c.role === CONTACT_ROLES.FAMILY ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.FAMILY]}</option>
+                  <option value="${CONTACT_ROLES.LOCAL_HELP}" ${c.role === CONTACT_ROLES.LOCAL_HELP ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.LOCAL_HELP]}</option>
+                  <option value="${CONTACT_ROLES.GUIDE}" ${c.role === CONTACT_ROLES.GUIDE ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.GUIDE]}</option>
+                  <option value="${CONTACT_ROLES.OTHER}" ${c.role === CONTACT_ROLES.OTHER ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.OTHER]}</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" name="phone" class="text-input" value="${escapeHtml(c.phone || '')}" placeholder="+91 ..." />
+            </div>
+          `,
+          readItemFields: (cardEl, c) => {
+            c.name = cardEl.querySelector('[name="name"]')?.value || '';
+            c.role = cardEl.querySelector('[name="role"]')?.value || CONTACT_ROLES.FAMILY;
+            c.phone = cardEl.querySelector('[name="phone"]')?.value || '';
+          },
+          onUpdate: () => {
+            onSave();
+            const countSpan = groupEl.querySelector('.collapsible-section-count');
+            if (countSpan) countSpan.textContent = `(${trek.safety.contacts.length})`;
+            const warnSpan = groupEl.querySelector('.collapsible-section-warning');
+            const stillWarn = trek.safety.contacts.length === 0 || trek.safety.contacts.some((c) => !c.name?.trim() || !c.phone?.trim());
+            if (warnSpan) warnSpan.hidden = !stillWarn;
+          },
+        });
+      },
+    });
+
+    contactsContainer.appendChild(groupEl);
+  }
+
+  renderContactsGroup();
 
   // Bind Carrying checklist
   const essentialCbs = {
