@@ -8,8 +8,7 @@ Built for the [Hacktoberfest Weekend Challenge: Build for a Friend](https://dev.
 
 ## Live App
 
-https://meawdak.github.io/Trekkie/
-
+ https://meawdak.github.io/Trek-Organization/
 ## What I Built
 
 **Trekkie is an offline trek-planning agent that refuses to guess.**
