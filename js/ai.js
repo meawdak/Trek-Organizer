@@ -715,3 +715,450 @@ export async function reviewPlan(trek, ruleResults, settings, signal) {
 
   return filterSuggestions(parsed, trek, planSummary, conditions);
 }
+
+export const SYSTEM_PROMPT_NOTES = `Extract trek-planning information from the user's text. Copy values exactly as written in the text. Do not guess, complete or invent anything: if a value is not in the text, use an empty string. Dates must be YYYY-MM-DD only if the day and month appear in the text; use the year given in the trip context if the text has no year. Times HH:mm only if written in the text.
+Return ONLY JSON:
+{"travel":[{"direction":"to|during|return|unknown","mode":"train|bus|jeep|taxi|flight|other","from":"","to":"","date":"","time":"","bookingRef":""}],
+"stays":[{"name":"","place":"","checkIn":"","nights":""}],
+"gear":[{"item":"","category":""}],
+"food":[{"item":"","quantity":""}],
+"contacts":[{"name":"","phone":"","role":"family|local_help|guide|other"}],
+"permits":[{"name":"","authority":""}],
+"other":[""]}
+Use empty lists for anything not present.`;
+
+// Verifies extracted values or an entire parsed structure deterministically against source text to prevent AI invention.
+export function verifyAgainstSource(valueOrParsed, text) {
+  if (typeof text !== 'string') {
+    text = '';
+  }
+  const normSource = normalizeText(text);
+  const sourceDigits = text.replace(/\D/g, '');
+
+  // If called for a single string value check
+  if (typeof valueOrParsed === 'string') {
+    const normVal = normalizeText(valueOrParsed);
+    return Boolean(normVal && normSource.includes(normVal));
+  }
+
+  if (!valueOrParsed || typeof valueOrParsed !== 'object' || Array.isArray(valueOrParsed)) {
+    return {
+      result: {
+        travel: [],
+        stays: [],
+        gear: [],
+        food: [],
+        contacts: [],
+        permits: [],
+        other: [],
+      },
+      droppedCount: 0,
+    };
+  }
+
+  let droppedCount = 0;
+
+  // Helper for text fields (from, to, name, place, item, authority, bookingRef)
+  const checkText = (val) => {
+    if (typeof val !== 'string') return '';
+    const trimmed = val.trim();
+    if (!trimmed) return '';
+    const normVal = normalizeText(trimmed);
+    if (normVal && normSource.includes(normVal)) {
+      return trimmed;
+    }
+    droppedCount++;
+    return '';
+  };
+
+  // Helper for phone digits
+  const checkPhone = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    const digits = String(val).replace(/\D/g, '');
+    if (!digits) {
+      droppedCount++;
+      return '';
+    }
+    const last10 = digits.length > 10 ? digits.slice(-10) : digits;
+    if (last10.length >= 5 && sourceDigits.includes(last10)) {
+      return String(val).trim();
+    }
+    droppedCount++;
+    return '';
+  };
+
+  // Helper for date validation (YYYY-MM-DD)
+  const checkDate = (val) => {
+    if (!val || typeof val !== 'string') return { date: '', dateCheck: false };
+    const trimmed = val.trim();
+    if (!trimmed) return { date: '', dateCheck: false };
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      droppedCount++;
+      return { date: '', dateCheck: false };
+    }
+    const y = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const d = parseInt(match[3], 10);
+    if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) {
+      droppedCount++;
+      return { date: '', dateCheck: false };
+    }
+    const testDate = new Date(y, m - 1, d);
+    if (
+      testDate.getFullYear() !== y ||
+      testDate.getMonth() !== m - 1 ||
+      testDate.getDate() !== d
+    ) {
+      droppedCount++;
+      return { date: '', dateCheck: false };
+    }
+    return { date: trimmed, dateCheck: true };
+  };
+
+  // Helper for time (HH:mm)
+  const checkTime = (val) => {
+    if (!val || typeof val !== 'string') return '';
+    const trimmed = val.trim();
+    if (!trimmed) return '';
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) {
+      droppedCount++;
+      return '';
+    }
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    if (h < 0 || h > 23 || m < 0 || m > 59) {
+      droppedCount++;
+      return '';
+    }
+    const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const timeDigits = `${match[1]}${match[2]}`;
+    if (normSource.includes(normalizeText(trimmed)) || sourceDigits.includes(timeDigits)) {
+      return formatted;
+    }
+    droppedCount++;
+    return '';
+  };
+
+  // 1. Travel
+  const ALLOWED_DIRECTIONS = ['to', 'during', 'return', 'unknown'];
+  const ALLOWED_MODES = ['train', 'bus', 'jeep', 'taxi', 'flight', 'other'];
+  const verifiedTravel = [];
+
+  const rawTravel = Array.isArray(valueOrParsed.travel) ? valueOrParsed.travel : [];
+  for (const t of rawTravel) {
+    if (!t || typeof t !== 'object') {
+      droppedCount++;
+      continue;
+    }
+    const from = checkText(t.from);
+    const to = checkText(t.to);
+    // Drop any travel item whose main fields (to and from) are both empty
+    if (!from && !to) {
+      droppedCount++;
+      continue;
+    }
+
+    let direction = typeof t.direction === 'string' ? t.direction.trim().toLowerCase() : 'unknown';
+    if (!ALLOWED_DIRECTIONS.includes(direction)) {
+      if (direction) droppedCount++;
+      direction = 'unknown';
+    }
+
+    let mode = typeof t.mode === 'string' ? t.mode.trim().toLowerCase() : 'other';
+    if (!ALLOWED_MODES.includes(mode)) {
+      if (mode) droppedCount++;
+      mode = 'other';
+    }
+
+    const { date, dateCheck } = checkDate(t.date);
+    const time = checkTime(t.time);
+    const bookingRef = checkText(t.bookingRef);
+
+    verifiedTravel.push({
+      direction,
+      mode,
+      from,
+      to,
+      date,
+      dateCheck,
+      time,
+      bookingRef,
+    });
+  }
+
+  // 2. Stays
+  const verifiedStays = [];
+  const rawStays = Array.isArray(valueOrParsed.stays) ? valueOrParsed.stays : [];
+  for (const s of rawStays) {
+    if (!s || typeof s !== 'object') {
+      droppedCount++;
+      continue;
+    }
+    const name = checkText(s.name);
+    // Drop any stay whose main field (name) is empty
+    if (!name) {
+      droppedCount++;
+      continue;
+    }
+    const place = checkText(s.place);
+    const { date: checkIn, dateCheck: checkInCheck } = checkDate(s.checkIn);
+    let nights = '';
+    if (s.nights !== null && s.nights !== undefined && s.nights !== '') {
+      const n = parseInt(s.nights, 10);
+      if (!isNaN(n) && n > 0 && n <= 365) {
+        nights = n;
+      } else {
+        droppedCount++;
+      }
+    }
+
+    verifiedStays.push({
+      name,
+      place,
+      checkIn,
+      checkInCheck,
+      nights,
+    });
+  }
+
+  // 3. Gear
+  const verifiedGear = [];
+  const rawGear = Array.isArray(valueOrParsed.gear) ? valueOrParsed.gear : [];
+  for (const g of rawGear) {
+    if (!g || typeof g !== 'object') {
+      droppedCount++;
+      continue;
+    }
+    const item = checkText(g.item);
+    if (!item) {
+      droppedCount++;
+      continue;
+    }
+    const category = typeof g.category === 'string' ? g.category.trim() : '';
+
+    verifiedGear.push({
+      item,
+      category,
+    });
+  }
+
+  // 4. Food
+  const verifiedFood = [];
+  const rawFood = Array.isArray(valueOrParsed.food) ? valueOrParsed.food : [];
+  for (const f of rawFood) {
+    if (!f || typeof f !== 'object') {
+      droppedCount++;
+      continue;
+    }
+    const item = checkText(f.item);
+    if (!item) {
+      droppedCount++;
+      continue;
+    }
+    const quantity = checkText(f.quantity);
+
+    verifiedFood.push({
+      item,
+      quantity,
+    });
+  }
+
+  // 5. Contacts
+  const ALLOWED_ROLES = ['family', 'local_help', 'guide', 'other'];
+  const verifiedContacts = [];
+  const rawContacts = Array.isArray(valueOrParsed.contacts) ? valueOrParsed.contacts : [];
+  for (const c of rawContacts) {
+    if (!c || typeof c !== 'object') {
+      droppedCount++;
+      continue;
+    }
+    const name = checkText(c.name);
+    if (!name) {
+      droppedCount++;
+      continue;
+    }
+    const phone = checkPhone(c.phone);
+    let role = typeof c.role === 'string' ? c.role.trim().toLowerCase() : 'other';
+    if (!ALLOWED_ROLES.includes(role)) {
+      if (role) droppedCount++;
+      role = 'other';
+    }
+
+    verifiedContacts.push({
+      name,
+      phone,
+      role,
+    });
+  }
+
+  // 6. Permits
+  const verifiedPermits = [];
+  const rawPermits = Array.isArray(valueOrParsed.permits) ? valueOrParsed.permits : [];
+  for (const p of rawPermits) {
+    if (!p || typeof p !== 'object') {
+      droppedCount++;
+      continue;
+    }
+    const name = checkText(p.name);
+    if (!name) {
+      droppedCount++;
+      continue;
+    }
+    const authority = checkText(p.authority);
+
+    verifiedPermits.push({
+      name,
+      authority,
+    });
+  }
+
+  // 7. Other notes
+  const verifiedOther = [];
+  const rawOther = Array.isArray(valueOrParsed.other) ? valueOrParsed.other : [];
+  for (const line of rawOther) {
+    if (typeof line !== 'string') {
+      droppedCount++;
+      continue;
+    }
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const normLine = normalizeText(trimmed);
+    if (normLine && normSource.includes(normLine)) {
+      verifiedOther.push(trimmed);
+    } else {
+      droppedCount++;
+    }
+  }
+
+  return {
+    result: {
+      travel: verifiedTravel,
+      stays: verifiedStays,
+      gear: verifiedGear,
+      food: verifiedFood,
+      contacts: verifiedContacts,
+      permits: verifiedPermits,
+      other: verifiedOther,
+    },
+    droppedCount,
+  };
+}
+
+// Extracts trek planning items from unstructured text via Ollama chat and anti-invention verification.
+export async function extractFromNotes(text, trek, settings, signal) {
+  const ollamaUrl = (settings?.ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
+  const model = settings?.model || 'gemma3:4b';
+  const timeoutSec = Math.max(60, Math.min(900, Number(settings?.reviewTimeoutSec) || 300));
+
+  const tripDates =
+    trek?.overview?.tripStartDate || trek?.overview?.tripEndDate
+      ? `${formatDate(trek.overview.tripStartDate) || 'not set'} to ${formatDate(trek.overview.tripEndDate) || 'not set'}`
+      : 'not set';
+  const trekDates =
+    trek?.overview?.startDate || trek?.overview?.endDate
+      ? `${formatDate(trek.overview.startDate) || 'not set'} to ${formatDate(trek.overview.endDate) || 'not set'}`
+      : 'not set';
+  const region = trek?.overview?.region?.trim() || 'not set';
+
+  const userContent = `Trip context: trip dates ${tripDates}, trekking dates ${trekDates}, region ${region}.\n\nText:\n${text}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    const err = new Error(`Extraction timed out after ${timeoutSec}s`);
+    err.code = 'timeout';
+    controller.abort(err);
+  }, timeoutSec * 1000);
+
+  const onCallerAbort = () => {
+    const err = new Error('Extraction cancelled');
+    err.code = 'cancelled';
+    controller.abort(err);
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(timeoutId);
+      const cancelErr = new Error('Extraction cancelled');
+      cancelErr.code = 'cancelled';
+      throw cancelErr;
+    }
+    signal.addEventListener('abort', onCallerAbort, { once: true });
+  }
+
+  let replyText = '';
+  try {
+    const res = await fetch(`${ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        format: 'json',
+        keep_alive: '10m',
+        options: {
+          temperature: 0,
+          num_ctx: 4096,
+        },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT_NOTES },
+          { role: 'user', content: userContent },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const err = new Error(`Ollama request failed with HTTP ${res.status}`);
+      err.code = 'network';
+      throw err;
+    }
+
+    const data = await res.json();
+    replyText = data?.message?.content || '';
+  } catch (err) {
+    if (signal?.aborted || err.code === 'cancelled' || controller.signal.reason?.code === 'cancelled') {
+      const cancelErr = new Error('Extraction cancelled');
+      cancelErr.code = 'cancelled';
+      throw cancelErr;
+    }
+    if (err.code === 'timeout' || controller.signal.reason?.code === 'timeout') {
+      const timeoutErr = new Error(`Extraction timed out after ${timeoutSec}s`);
+      timeoutErr.code = 'timeout';
+      throw timeoutErr;
+    }
+    console.error('extractFromNotes request failed:', err);
+    const netErr = new Error('Gemma stopped responding during extraction.');
+    netErr.code = 'network';
+    throw netErr;
+  } finally {
+    clearTimeout(timeoutId);
+    if (signal) {
+      signal.removeEventListener('abort', onCallerAbort);
+    }
+  }
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(replyText);
+  } catch (err) {
+    console.error('Failed to parse Ollama JSON extraction reply:', err);
+    return {
+      result: {
+        travel: [],
+        stays: [],
+        gear: [],
+        food: [],
+        contacts: [],
+        permits: [],
+        other: [],
+      },
+      droppedCount: 0,
+    };
+  }
+
+  return verifyAgainstSource(parsed, text);
+}
