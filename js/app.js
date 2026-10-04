@@ -3,6 +3,7 @@ import { escapeHtml } from './model.js';
 import { renderHome } from './views/home.js';
 import { renderPlan } from './views/plan.js';
 import { renderDashboard } from './views/dashboard.js';
+import { renderReview } from './views/review.js';
 import { renderSettings } from './views/settings.js';
 import { TABS, renderBottomTabBar } from './ui.js';
 
@@ -115,6 +116,11 @@ export function router() {
       return;
     }
 
+    if (tabKey === 'review') {
+      renderReview(appContainer, trekId);
+      return;
+    }
+
     renderTrekPlaceholder(appContainer, trekId, tabKey);
     return;
   }
@@ -137,6 +143,8 @@ function registerServiceWorker() {
 function initOfflineIndicator() {
   const banner = document.getElementById('offline-banner');
   if (!banner) return;
+
+  banner.textContent = 'Offline — everything works. Gemma review needs Ollama running on the laptop.';
 
   const updateStatus = () => {
     const isOffline = !navigator.onLine;

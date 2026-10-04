@@ -5,6 +5,7 @@ export const STORAGE_KEY = 'trekOrganizer.v1';
 export const DEFAULT_SETTINGS = Object.freeze({
   ollamaUrl: 'http://localhost:11434',
   model: 'gemma3:4b',
+  reviewTimeoutSec: 300,
 });
 
 // Creates a fresh top-level store object according to the schema.
@@ -28,9 +29,17 @@ export function loadStore() {
       console.error('Invalid store format in localStorage. Resetting to empty store.');
       return createDefaultStore();
     }
+    const rawSettings = parsed.settings || {};
     return {
       schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 1,
-      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
+      settings: {
+        ...DEFAULT_SETTINGS,
+        ...rawSettings,
+        reviewTimeoutSec:
+          typeof rawSettings.reviewTimeoutSec === 'number'
+            ? rawSettings.reviewTimeoutSec
+            : DEFAULT_SETTINGS.reviewTimeoutSec,
+      },
       treks: parsed.treks.map(normalizeTrek),
     };
   } catch (err) {

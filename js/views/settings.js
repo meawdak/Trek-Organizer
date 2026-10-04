@@ -56,6 +56,20 @@ export function renderSettings(container) {
               autocomplete="off"
             />
           </div>
+          <div class="form-group">
+            <label for="settings-review-timeout" class="form-label">Review time limit (seconds)</label>
+            <input
+              type="number"
+              id="settings-review-timeout"
+              name="reviewTimeoutSec"
+              class="text-input"
+              min="60"
+              max="900"
+              value="${settings.reviewTimeoutSec ?? 300}"
+              placeholder="300"
+              autocomplete="off"
+            />
+          </div>
           <p class="settings-help-text">Gemma runs on the laptop through Ollama. Not needed on your phone.</p>
         </section>
 
@@ -159,19 +173,32 @@ export function renderSettings(container) {
 
   const ollamaInput = container.querySelector('#settings-ollama-url');
   const modelInput = container.querySelector('#settings-model');
+  const timeoutInput = container.querySelector('#settings-review-timeout');
 
   const onSettingsChange = () => {
+    let timeoutVal = parseInt(timeoutInput?.value, 10);
+    if (isNaN(timeoutVal)) {
+      timeoutVal = 300;
+    } else if (timeoutVal < 60) {
+      timeoutVal = 60;
+    } else if (timeoutVal > 900) {
+      timeoutVal = 900;
+    }
+
     saveSettings({
       ollamaUrl: ollamaInput.value.trim() || 'http://localhost:11434',
       model: modelInput.value.trim() || 'gemma3:4b',
+      reviewTimeoutSec: timeoutVal,
     });
     showSavedIndicator();
   };
 
-  if (ollamaInput && modelInput) {
+  if (ollamaInput && modelInput && timeoutInput) {
     ollamaInput.addEventListener('input', onSettingsChange);
     ollamaInput.addEventListener('change', onSettingsChange);
     modelInput.addEventListener('input', onSettingsChange);
     modelInput.addEventListener('change', onSettingsChange);
+    timeoutInput.addEventListener('input', onSettingsChange);
+    timeoutInput.addEventListener('change', onSettingsChange);
   }
 }

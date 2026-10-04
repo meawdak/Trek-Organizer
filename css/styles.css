@@ -1466,6 +1466,211 @@ select.status-select {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Review screen (UX_SPEC.md §2.5) */
+.review-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.review-intro {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.review-action-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-buttons-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-status-msg {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: #f1f5f9;
+  color: var(--text-primary);
+}
+
+.review-status-msg.error {
+  color: #991b1b;
+  background-color: #fef2f2;
+  border-color: #ef4444;
+}
+
+.review-status-msg.info {
+  color: #1e3a5f;
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.review-running-area {
+  margin: 8px 0;
+}
+
+.review-running-box {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.review-spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #e2e8f0;
+  border-top-color: var(--btn-primary-bg);
+  border-radius: 50%;
+  animation: review-spin 1s linear infinite;
+}
+
+@keyframes review-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.review-running-text {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.review-results-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.review-meta-bar {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.review-stale-banner {
+  background-color: #fffbeb;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.review-groups-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.review-group-card {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review-group-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+}
+
+.review-items-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.chip-suggestion {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #e2e8f0;
+  color: #334155;
+}
+
+.review-item-text {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.review-empty-group {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.review-raw-notes {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  background-color: #f8fafc;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  line-height: 1.45;
+}
+
+.review-empty-advisory {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 18px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.review-dropped-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 6px;
+  font-style: italic;
+}
+
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -1480,6 +1685,10 @@ select.status-select {
   .btn-icon-delete:active .icon-trash,
   .btn-icon-delete:focus-visible .icon-trash {
     transform: none !important;
+  }
+
+  .review-spinner {
+    animation: none !important;
   }
 }
 
