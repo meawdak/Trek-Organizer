@@ -376,7 +376,7 @@ export function mountListEditor(container, options) {
 
       // Header click toggles between expanded and collapsed
       headerEl.addEventListener('click', (e) => {
-        if (e.target.closest('button, input, select, textarea, label, .list-card-header-actions, .gear-packed-wrapper, .btn-icon-delete')) {
+        if (e.target.closest('button, input, select, textarea, label, a, .list-card-header-actions, .gear-packed-wrapper, .btn-icon-delete')) {
           return;
         }
         if (isExpanded) {

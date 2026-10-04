@@ -87,6 +87,64 @@ export const READINESS = Object.freeze({
   NOT_READY: 'not_ready',
 });
 
+export const CONTACT_ROLES = Object.freeze({
+  FAMILY: 'family',
+  LOCAL_HELP: 'local_help',
+  GUIDE: 'guide',
+  OTHER: 'other',
+});
+
+export const CONTACT_ROLE_LABELS = Object.freeze({
+  [CONTACT_ROLES.FAMILY]: 'Family / friend',
+  [CONTACT_ROLES.LOCAL_HELP]: 'Local help (forest office, police, hospital)',
+  [CONTACT_ROLES.GUIDE]: 'Guide / porter',
+  [CONTACT_ROLES.OTHER]: 'Other',
+});
+
+export const DEFAULT_ESSENTIALS = Object.freeze({
+  firstAid: false,
+  medicines: false,
+  headlamp: false,
+  powerBank: false,
+  offlineMap: false,
+  whistle: false,
+});
+
+export const GEAR_CATEGORIES = Object.freeze({
+  shelter: 'Shelter',
+  sleep: 'Sleep system',
+  clothing: 'Clothing',
+  footwear: 'Footwear',
+  cooking: 'Cooking',
+  water: 'Water',
+  navigation: 'Navigation',
+  lighting_power: 'Lighting & power',
+  first_aid: 'First aid',
+  toiletries: 'Toiletries',
+  documents: 'Documents & money',
+  other: 'Other',
+  gemma: 'Suggested by Gemma',
+});
+
+// Normalizes a free-text or legacy gear category into a standard GEAR_CATEGORIES key.
+export function normalizeGearCategory(cat) {
+  if (typeof cat !== 'string') return 'other';
+  const trimmed = cat.trim().toLowerCase();
+  if (!trimmed) return 'other';
+
+  for (const [key, label] of Object.entries(GEAR_CATEGORIES)) {
+    if (
+      trimmed === key.toLowerCase() ||
+      trimmed === label.toLowerCase() ||
+      trimmed === key.replace(/_/g, ' ').toLowerCase() ||
+      trimmed === key.replace(/_/g, '-').toLowerCase()
+    ) {
+      return key;
+    }
+  }
+  return 'other';
+}
+
 // Creates a new empty trek object matching the shape in TECH_SPECt.md §3.
 export function createEmptyTrek(name = '') {
   const now = new Date().toISOString();
@@ -126,7 +184,20 @@ export function createEmptyTrek(name = '') {
         phone: '',
         hasItinerary: false,
         expectedReturn: '',
+        alertBy: '',
+        checkInPlan: '',
+        instructions: '',
       },
+      essentials: {
+        firstAid: false,
+        medicines: false,
+        headlamp: false,
+        powerBank: false,
+        offlineMap: false,
+        whistle: false,
+      },
+      medicines: '',
+      emergencyNumber: '112',
       nearestHelp: '',
       network: '',
     },
@@ -240,8 +311,8 @@ export function normalizeTrek(trek) {
     ? trek.gear.map((g) => ({
         id: g?.id || crypto.randomUUID(),
         item: g?.item ?? '',
-        category: g?.category ?? GEAR_CATEGORIES.CLOTHING,
-        source: g?.source ?? GEAR_SOURCES.HAVE,
+        category: normalizeGearCategory(g?.category),
+        source: g?.source ?? SOURCES.HAVE,
         packed: Boolean(g?.packed),
       }))
     : [];
@@ -266,6 +337,7 @@ export function normalizeTrek(trek) {
     ? trek.safety.contacts.map((c) => ({
         id: c?.id || crypto.randomUUID(),
         name: c?.name ?? '',
+        role: c?.role ?? CONTACT_ROLES.FAMILY,
         relation: c?.relation ?? '',
         phone: c?.phone ?? '',
       }))
@@ -276,11 +348,32 @@ export function normalizeTrek(trek) {
     phone: trek.safety?.trustedPerson?.phone ?? '',
     hasItinerary: Boolean(trek.safety?.trustedPerson?.hasItinerary),
     expectedReturn: trek.safety?.trustedPerson?.expectedReturn ?? '',
+    alertBy: trek.safety?.trustedPerson?.alertBy ?? '',
+    checkInPlan: trek.safety?.trustedPerson?.checkInPlan ?? '',
+    instructions: trek.safety?.trustedPerson?.instructions ?? '',
   };
+
+  const rawEssentials = trek.safety?.essentials || {};
+  const essentials = {
+    firstAid: Boolean(rawEssentials.firstAid),
+    medicines: Boolean(rawEssentials.medicines),
+    headlamp: Boolean(rawEssentials.headlamp),
+    powerBank: Boolean(rawEssentials.powerBank),
+    offlineMap: Boolean(rawEssentials.offlineMap),
+    whistle: Boolean(rawEssentials.whistle),
+  };
+
+  const emergencyNumber =
+    typeof trek.safety?.emergencyNumber === 'string' && trek.safety.emergencyNumber.trim()
+      ? trek.safety.emergencyNumber.trim()
+      : '112';
 
   const safety = {
     contacts,
     trustedPerson,
+    essentials,
+    medicines: typeof trek.safety?.medicines === 'string' ? trek.safety.medicines : '',
+    emergencyNumber,
     nearestHelp: trek.safety?.nearestHelp ?? '',
     network: trek.safety?.network ?? '',
   };

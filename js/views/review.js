@@ -282,7 +282,8 @@ export function renderReview(container, trekId) {
           } else if (err?.code === 'timeout') {
             const timeoutSec = currentSettings.reviewTimeoutSec || 300;
             const timeoutMin = Math.round(timeoutSec / 60);
-            statusMsg.textContent = `Gemma took longer than ${timeoutMin} minutes and was stopped. Laptops with little memory can be slow — try again (the second run is usually faster), close other apps, or use a smaller model in Settings.`;
+            const minUnit = timeoutMin === 1 ? '1 minute' : `${timeoutMin} minutes`;
+            statusMsg.textContent = `Gemma took longer than ${minUnit} and was stopped. Laptops with little memory can be slow — try again (the second run is usually faster), close other apps, or use a smaller model in Settings.`;
             statusMsg.className = 'review-status-msg error';
             statusMsg.hidden = false;
           } else if (err?.code === 'network') {

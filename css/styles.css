@@ -872,6 +872,22 @@ textarea.text-input {
   font-size: 0.95rem;
 }
 
+.gear-supplies-helper {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.gear-supplies-note {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  margin-top: 8px;
+  padding: 10px 14px;
+  background-color: #e8f0fe;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+
 .gear-packed-wrapper {
   display: inline-flex;
   align-items: center;
@@ -906,6 +922,128 @@ textarea.text-input {
 .card-packed .list-card-title {
   text-decoration: line-through;
   color: var(--text-secondary);
+}
+
+/* Gear grouped sections */
+.gear-sections-wrapper {
+  margin-top: 14px;
+}
+
+.gear-section-group {
+  margin-bottom: 12px;
+}
+
+.gear-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  min-height: 44px;
+  transition: background-color 0.15s ease;
+}
+
+.gear-section-header:hover {
+  background-color: #f3f4f6;
+}
+
+.gear-section-header:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.gear-section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gear-section-toggle-icon {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.gear-section-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gear-section-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.gear-section-header-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn-gear-section-add {
+  padding: 6px 14px;
+  font-size: 0.875rem;
+  min-height: 38px;
+}
+
+.gear-section-body {
+  padding-top: 6px;
+}
+
+.gear-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gear-add-other-section-row {
+  margin-top: 20px;
+  padding: 14px;
+  background-color: #f9fafb;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+}
+
+.gear-add-other-controls-wrap {
+  margin-bottom: 0;
+}
+
+.gear-add-other-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.gear-add-other-controls select {
+  flex: 1;
+  min-height: 44px;
+}
+
+.gear-add-other-controls button {
+  min-height: 44px;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.gear-other-first-aid-wrap {
+  margin-top: 12px;
 }
 
 /* Safety section blocks (B4) */
@@ -1669,6 +1807,632 @@ select.status-select {
   text-align: center;
   margin-top: 6px;
   font-style: italic;
+}
+
+/* ─── Safety Section Redesign (Part A & D2) ─── */
+.safety-hint {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: -4px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.safety-essentials-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  background-color: var(--bg-surface);
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+@media (min-width: 600px) {
+  .safety-essentials-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.essential-item-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.first-aid-gear-link {
+  font-size: 0.8125rem;
+  color: #1e3a5f;
+  text-decoration: underline;
+  margin-left: 28px;
+  font-weight: 500;
+  display: inline-block;
+  line-height: 1.3;
+}
+
+.first-aid-gear-link:hover,
+.first-aid-gear-link:focus-visible {
+  color: #2c5282;
+}
+
+.contact-call-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-decoration: none;
+  min-height: 32px;
+  line-height: 1;
+}
+
+.contact-call-link:hover,
+.contact-call-link:focus-visible {
+  background-color: #e2e8f0;
+  text-decoration: underline;
+}
+
+.safety-share-block {
+  margin-top: 16px;
+  padding-bottom: 24px;
+}
+
+/* ─── Dashboard Share Row (Part B) ─── */
+.dashboard-share-row {
+  margin: 16px 0;
+}
+
+/* ─── Today View (Part C) ─── */
+.today-container {
+  padding-bottom: 80px;
+}
+
+.page-date-indicator {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.today-main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* State 2: Focus Card */
+.today-focus-card {
+  background-color: var(--bg-surface);
+  border: 2px solid #1e3a5f;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+}
+
+.today-card-badge {
+  align-self: flex-start;
+  background-color: #1e3a5f;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.today-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.today-day-number {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.today-date {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.today-route-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.25;
+  margin: 4px 0;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.today-metrics-row {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #2c5282;
+  margin-bottom: 4px;
+}
+
+.today-details-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.today-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.detail-value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.detail-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.detail-subtext {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.today-notes-box {
+  background-color: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+  color: #78350f;
+  line-height: 1.45;
+}
+
+.notes-label {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Check-in SMS Button */
+.today-checkin-wrapper {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn-checkin {
+  min-height: 48px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.today-checkin-preview {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* State 1: Before Trip Hero Card */
+.today-hero-card {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(30, 58, 95, 0.15);
+}
+
+.hero-countdown-badge {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.hero-countdown-title {
+  font-size: 1.625rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+.hero-date-range {
+  font-size: 0.9375rem;
+  opacity: 0.9;
+}
+
+.today-upcoming-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.today-section-heading {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* State 3: Travel events */
+.today-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.today-event-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.event-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.event-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.event-title {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.event-time {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.event-ref {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.today-rest-desc {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 8px 0;
+}
+
+/* State 4 & Fallback: Status Cards */
+.today-status-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-card-icon {
+  font-size: 2.5rem;
+}
+
+.status-card-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.status-card-desc {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.status-card-action {
+  margin-top: 6px;
+}
+
+/* ─── Emergency Card (Part C2) ─── */
+.today-emergency-card {
+  background-color: var(--bg-surface);
+  border: 2px solid #b91c1c;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 2px 10px rgba(185, 28, 28, 0.08);
+}
+
+.today-emergency-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.today-emergency-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #b91c1c;
+}
+
+.emergency-badge {
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.emergency-main-dial {
+  display: flex;
+}
+
+.btn-emergency-call {
+  flex: 1;
+  min-height: 52px;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 4px 6px rgba(220, 38, 38, 0.2);
+  transition: background-color 0.15s ease;
+}
+
+.btn-emergency-call:hover,
+.btn-emergency-call:focus-visible {
+  background-color: #b91c1c;
+}
+
+.today-emergency-unpacked {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+.unpacked-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.unpacked-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.today-emergency-packed-ok {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.today-emergency-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-emergency-subtitle {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.emergency-contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.emergency-call-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  text-decoration: none;
+  min-height: 48px;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.emergency-call-row:hover,
+.emergency-call-row:focus-visible {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.call-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.call-row-name {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.call-row-role {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.call-row-phone {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: #1e3a5f;
+  white-space: nowrap;
+}
+
+.emergency-call-row-text {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+.today-emergency-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.875rem;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+}
+
+.info-label {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.info-value {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+/* ─── Share Plan Toast & Modal (Part B) ─── */
+.share-toast {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #1f2937;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.share-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.share-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+}
+
+.share-modal-dialog {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.share-modal-textarea {
+  height: 240px;
+  font-family: monospace;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  resize: none;
+}
+
+.share-modal-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Reduced motion preference */

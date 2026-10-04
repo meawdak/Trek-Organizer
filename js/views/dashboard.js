@@ -10,6 +10,7 @@ import {
 } from '../ui.js';
 import { runChecks } from '../checks.js';
 import { buildTimeline } from '../timeline.js';
+import { sharePlan } from '../share.js';
 
 // Returns an appropriate emoji icon based on timeline entry type and travel mode.
 function getTimelineIcon(type, mode) {
@@ -117,6 +118,11 @@ export function renderDashboard(container, trekId) {
         </div>
       </section>
 
+      <!-- Share plan action -->
+      <div class="dashboard-share-row">
+        <button type="button" id="btn-dashboard-share" class="btn btn-secondary btn-block">Share plan</button>
+      </div>
+
       <!-- Plan check issues list -->
       <section class="dashboard-section issues-section" aria-label="Plan Check Issues">
         <h2 class="dashboard-section-title">Plan Check</h2>
@@ -199,4 +205,11 @@ export function renderDashboard(container, trekId) {
       ${renderBottomTabBar(trek.id, 'dashboard')}
     </div>
   `;
+
+  const btnDashboardShare = container.querySelector('#btn-dashboard-share');
+  if (btnDashboardShare) {
+    btnDashboardShare.addEventListener('click', () => {
+      sharePlan(trek);
+    });
+  }
 }

@@ -9,7 +9,12 @@ import {
   STAY_TYPES,
   STAY_TYPE_LABELS,
   SOURCES,
+  CONTACT_ROLES,
+  CONTACT_ROLE_LABELS,
+  GEAR_CATEGORIES,
+  normalizeGearCategory,
 } from '../model.js';
+import { sharePlan } from '../share.js';
 import { isSectionComplete } from '../checks.js';
 import {
   formatDate,
@@ -25,6 +30,7 @@ import {
   renderBottomTabBar,
   mountListEditor,
   downloadJsonFile,
+  TRASH_ICON_SVG,
 } from '../ui.js';
 
 export const PLAN_SECTIONS = [
@@ -742,113 +748,563 @@ function renderDaysSection(container, trek, onSave) {
   });
 }
 
-// Renders and binds the Gear list section with a packed counter and direct packed toggling.
+export const COMMON_FIRST_AID_SUPPLIES = Object.freeze([
+  'Adhesive bandages',
+  'Sterile gauze pads',
+  'Crepe bandage',
+  'Medical tape',
+  'Blister plasters',
+  'Antiseptic wipes',
+  'Small scissors',
+  'Tweezers',
+  'Disposable gloves',
+  'ORS sachets',
+]);
+
+// Renders and binds the Gear list section with grouped category headings, counters, and collapse/expand toggles.
 function renderGearSection(container, trek, onSave) {
   if (!Array.isArray(trek.gear)) {
     trek.gear = [];
   }
 
-  container.innerHTML = `
-    <div id="gear-counter-box" class="gear-counter-container"></div>
-    <div id="gear-list-container"></div>
-  `;
+  // Ensure all existing items have a normalized category key
+  trek.gear.forEach((g) => {
+    g.category = normalizeGearCategory(g.category);
+  });
 
-  const counterBox = container.querySelector('#gear-counter-box');
-  const listContainer = container.querySelector('#gear-list-container');
+  // In-memory UI state
+  const collapsedSections = new Set(); // tracks category keys user explicitly collapsed (default: all expanded)
+  const expandedCardIds = new Set();   // tracks gear item ids currently in edit mode
+  let suppliesNote = { text: '', hidden: true };
 
-  const updateCounter = () => {
-    const total = trek.gear.length;
-    const packed = trek.gear.filter((g) => g.packed).length;
-    counterBox.textContent = `${packed} of ${total} packed`;
+  const isGearItemEmpty = (g) =>
+    !g.item?.trim() &&
+    (g.source === SOURCES.HAVE || !g.source) &&
+    !g.packed;
+
+  const readCardFields = (cardEl, item) => {
+    if (!cardEl || !item) return;
+    item.item = cardEl.querySelector('[name="item"]')?.value || '';
+    item.category = normalizeGearCategory(cardEl.querySelector('[name="category"]')?.value || item.category);
+    item.source = cardEl.querySelector('[name="source"]')?.value || SOURCES.HAVE;
+    item.packed = Boolean(cardEl.querySelector('[name="packed"]')?.checked);
   };
 
-  updateCounter();
-
-    mountListEditor(listContainer, {
-    items: trek.gear,
-    emptyHint: 'No gear items recorded yet.',
-    addLabel: '+ Add gear item',
-    getItemTitle: (gear, idx) => (gear.item && gear.item.trim() ? gear.item.trim() : `Gear item ${idx + 1} (no item name)`),
-    getItemSubtitle: (gear) => {
-      const parts = [];
-      if (gear.category) parts.push(gear.category);
-      if (gear.source) parts.push(`Source: ${gear.source}`);
-      return parts.join(' • ');
-    },
-    renderCollapsedActions: (gear) => `
-      <div class="gear-packed-wrapper">
-        <label class="gear-packed-label" title="Toggle packed">
-          <input type="checkbox" class="gear-packed-cb" ${gear.packed ? 'checked' : ''} aria-label="Mark packed" />
-          <span>Packed</span>
-        </label>
-      </div>
-    `,
-    onBindCollapsed: (cardEl, gear, rerender) => {
-      cardEl.classList.toggle('card-packed', Boolean(gear.packed));
-      const cb = cardEl.querySelector('.gear-packed-cb');
-      if (cb) {
-        cb.addEventListener('click', (e) => e.stopPropagation());
-        cb.addEventListener('change', (e) => {
-          e.stopPropagation();
-          gear.packed = cb.checked;
-          cardEl.classList.toggle('card-packed', gear.packed);
-          updateCounter();
-          onSave();
-        });
+  const readAllExpandedCards = () => {
+    expandedCardIds.forEach((id) => {
+      const cardEl = container.querySelector(`[data-id="${id}"]`);
+      const item = trek.gear.find((g) => g.id === id);
+      if (cardEl && item) {
+        readCardFields(cardEl, item);
       }
-    },
-    createDefaultItem: () => ({
-      id: crypto.randomUUID(),
-      item: '',
-      category: '',
-      source: SOURCES.HAVE,
-      packed: false,
-    }),
-    isItemEmpty: (gear) =>
-      !gear.item?.trim() &&
-      !gear.category?.trim() &&
-      (gear.source === SOURCES.HAVE || !gear.source) &&
-      !gear.packed,
-    renderItemFields: (gear) => `
-      <div class="form-group">
-        <label class="form-label">Item</label>
-        <input type="text" name="item" class="text-input" value="${escapeHtml(gear.item || '')}" placeholder="e.g. Sleeping bag" />
-      </div>
+    });
+  };
 
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Category</label>
-          <input type="text" name="category" class="text-input" value="${escapeHtml(gear.category || '')}" placeholder="e.g. Shelter, Clothing, Cooking" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Source</label>
-          <select name="source" class="text-input">
-            <option value="${SOURCES.HAVE}" ${gear.source === SOURCES.HAVE ? 'selected' : ''}>Have</option>
-            <option value="${SOURCES.BORROW}" ${gear.source === SOURCES.BORROW ? 'selected' : ''}>Borrow</option>
-            <option value="${SOURCES.BUY}" ${gear.source === SOURCES.BUY ? 'selected' : ''}>Buy</option>
-          </select>
-        </div>
-      </div>
+  const cleanupEmptyItems = () => {
+    for (let i = trek.gear.length - 1; i >= 0; i--) {
+      if (!expandedCardIds.has(trek.gear[i].id) && isGearItemEmpty(trek.gear[i])) {
+        trek.gear.splice(i, 1);
+      }
+    }
+  };
 
-      <div class="form-group">
-        <label class="checkbox-label" for="gear-field-packed-${escapeHtml(gear.id)}">
-          <input type="checkbox" id="gear-field-packed-${escapeHtml(gear.id)}" name="packed" ${gear.packed ? 'checked' : ''} />
-          <span>Packed</span>
-        </label>
-      </div>
-    `,
-    readItemFields: (cardEl, gear) => {
-      gear.item = cardEl.querySelector('[name="item"]')?.value || '';
-      gear.category = cardEl.querySelector('[name="category"]')?.value || '';
-      gear.source = cardEl.querySelector('[name="source"]')?.value || SOURCES.HAVE;
-      gear.packed = Boolean(cardEl.querySelector('[name="packed"]')?.checked);
-      updateCounter();
-    },
-    onUpdate: () => {
-      updateCounter();
-      onSave();
-    },
-  });
+  const cleanupOnLeave = () => {
+    readAllExpandedCards();
+    cleanupEmptyItems();
+    onSave();
+  };
+  window.addEventListener('hashchange', cleanupOnLeave, { once: true });
+
+  const addCommonSupplies = () => {
+    readAllExpandedCards();
+    cleanupEmptyItems();
+    const existingNames = new Set(trek.gear.map((g) => (g.item || '').trim().toLowerCase()));
+    let addedCount = 0;
+    for (const supply of COMMON_FIRST_AID_SUPPLIES) {
+      if (!existingNames.has(supply.toLowerCase())) {
+        trek.gear.push({
+          id: crypto.randomUUID(),
+          item: supply,
+          category: 'first_aid',
+          source: SOURCES.HAVE,
+          packed: false,
+        });
+        existingNames.add(supply.toLowerCase());
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      suppliesNote = {
+        text: `Added ${addedCount} first-aid items to Gear. Edit or remove any you don't need.`,
+        hidden: false,
+      };
+    } else {
+      suppliesNote = {
+        text: 'All common first-aid items are already in Gear.',
+        hidden: false,
+      };
+    }
+
+    collapsedSections.delete('first_aid'); // ensure first_aid section is expanded
+    onSave();
+    render();
+  };
+
+  function render() {
+    container.innerHTML = '';
+
+    // Overall counter at top
+    const totalCount = trek.gear.length;
+    const packedCount = trek.gear.filter((g) => g.packed).length;
+
+    const counterBox = document.createElement('div');
+    counterBox.id = 'gear-counter-box';
+    counterBox.className = 'gear-counter-container';
+    counterBox.textContent = `${packedCount} of ${totalCount} packed`;
+    container.appendChild(counterBox);
+
+    // Group items by category in GEAR_CATEGORIES order
+    const categoryKeys = Object.keys(GEAR_CATEGORIES);
+    const visibleSections = [];
+    const emptyCategories = [];
+
+    categoryKeys.forEach((catKey) => {
+      const items = trek.gear.filter((g) => g.category === catKey);
+      if (items.length > 0) {
+        visibleSections.push({ catKey, items });
+      } else if (catKey !== 'gemma') {
+        emptyCategories.push(catKey);
+      }
+    });
+
+    const isFirstAidEmpty = !trek.gear.some((g) => g.category === 'first_aid');
+
+    const sectionsWrapper = document.createElement('div');
+    sectionsWrapper.className = 'gear-sections-wrapper';
+
+    // If no sections have items at all, show empty hint
+    if (visibleSections.length === 0) {
+      const emptyHint = document.createElement('div');
+      emptyHint.className = 'list-editor-empty-hint';
+      emptyHint.textContent = 'No gear items recorded yet.';
+      sectionsWrapper.appendChild(emptyHint);
+    }
+
+    // Render each visible section
+    visibleSections.forEach(({ catKey, items }) => {
+      const catLabel = GEAR_CATEGORIES[catKey];
+      const secPacked = items.filter((g) => g.packed).length;
+      const secTotal = items.length;
+      const isCollapsed = collapsedSections.has(catKey);
+
+      const sectionGroup = document.createElement('div');
+      sectionGroup.className = 'gear-section-group';
+      sectionGroup.dataset.category = catKey;
+
+      // Section Header
+      const headerEl = document.createElement('div');
+      headerEl.className = 'gear-section-header';
+      headerEl.setAttribute('role', 'button');
+      headerEl.setAttribute('tabindex', '0');
+      headerEl.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      headerEl.setAttribute('aria-label', `${isCollapsed ? 'Expand' : 'Collapse'} ${catLabel} section`);
+
+      headerEl.innerHTML = `
+        <div class="gear-section-header-left">
+          <span class="gear-section-toggle-icon" aria-hidden="true">${isCollapsed ? '▸' : '▾'}</span>
+          <span class="gear-section-title">${escapeHtml(catLabel)}</span>
+          <span class="gear-section-count">(${secPacked}/${secTotal})</span>
+        </div>
+        <div class="gear-section-header-right">
+          <button type="button" class="btn btn-add btn-sm btn-gear-section-add" data-category="${catKey}" aria-label="Add item to ${escapeHtml(catLabel)}">+ Add</button>
+        </div>
+      `;
+
+      // Header click toggles collapse/expand (unless clicking the + Add button)
+      headerEl.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        if (isCollapsed) {
+          collapsedSections.delete(catKey);
+        } else {
+          collapsedSections.add(catKey);
+        }
+        render();
+      });
+
+      headerEl.addEventListener('keydown', (e) => {
+        if (e.target === headerEl && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          if (isCollapsed) {
+            collapsedSections.delete(catKey);
+          } else {
+            collapsedSections.add(catKey);
+          }
+          render();
+        }
+      });
+
+      // + Add button inside section header
+      const btnAddInSection = headerEl.querySelector('.btn-gear-section-add');
+      btnAddInSection.addEventListener('click', (e) => {
+        e.stopPropagation();
+        readAllExpandedCards();
+        cleanupEmptyItems();
+        expandedCardIds.clear();
+
+        const newItem = {
+          id: crypto.randomUUID(),
+          item: '',
+          category: catKey,
+          source: SOURCES.HAVE,
+          packed: false,
+        };
+        trek.gear.push(newItem);
+        expandedCardIds.add(newItem.id);
+        collapsedSections.delete(catKey);
+        onSave();
+        render();
+
+        setTimeout(() => {
+          const cardEl = container.querySelector(`[data-id="${newItem.id}"]`);
+          cardEl?.querySelector('input[name="item"]')?.focus();
+        }, 50);
+      });
+
+      sectionGroup.appendChild(headerEl);
+
+      // Section Body (cards + first-aid helper if first_aid)
+      if (!isCollapsed) {
+        const bodyEl = document.createElement('div');
+        bodyEl.className = 'gear-section-body';
+
+        // "Add common first-aid supplies" button inside First aid section
+        if (catKey === 'first_aid') {
+          const helperWrap = document.createElement('div');
+          helperWrap.className = 'gear-supplies-helper';
+          helperWrap.innerHTML = `
+            <button type="button" id="btn-add-first-aid-supplies" class="btn btn-add btn-block btn-add-first-aid-supplies">Add common first-aid supplies</button>
+            <div id="gear-supplies-note" class="gear-supplies-note" role="status" aria-live="polite" ${suppliesNote.hidden ? 'hidden' : ''}>${escapeHtml(suppliesNote.text)}</div>
+          `;
+          helperWrap.querySelector('#btn-add-first-aid-supplies').addEventListener('click', (e) => {
+            e.stopPropagation();
+            addCommonSupplies();
+          });
+          bodyEl.appendChild(helperWrap);
+        }
+
+        // Cards list
+        const cardsWrap = document.createElement('div');
+        cardsWrap.className = 'gear-cards-list';
+
+        items.forEach((item, index) => {
+          const isCardExpanded = expandedCardIds.has(item.id);
+          const title = item.item?.trim() || `Gear item ${index + 1} (no item name)`;
+          const subtitle = item.source ? `Source: ${item.source}` : '';
+
+          const card = document.createElement('div');
+          card.className = `list-card ${item.packed ? 'card-packed' : ''}`;
+          card.dataset.id = item.id;
+
+          if (!isCardExpanded) {
+            // Collapsed Card
+            card.innerHTML = `
+              <div
+                class="list-card-header"
+                role="button"
+                tabindex="0"
+                aria-expanded="false"
+                aria-label="Expand ${escapeHtml(title)}"
+              >
+                <div class="list-card-header-top">
+                  <span class="list-card-toggle-icon" aria-hidden="true">▸</span>
+                  <span class="list-card-title">${escapeHtml(title)}</span>
+                  <div class="list-card-header-actions">
+                    <div class="gear-packed-wrapper">
+                      <label class="gear-packed-label" title="Toggle packed">
+                        <input type="checkbox" class="gear-packed-cb" ${item.packed ? 'checked' : ''} aria-label="Mark packed" />
+                        <span>Packed</span>
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn-icon-delete btn-delete-collapsed"
+                      aria-label="Delete ${escapeHtml(title)}"
+                    >
+                      ${TRASH_ICON_SVG}
+                    </button>
+                  </div>
+                </div>
+                ${subtitle ? `
+                  <div class="list-card-header-bottom">
+                    <span class="list-card-subtitle">${escapeHtml(subtitle)}</span>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+
+            const cardHeader = card.querySelector('.list-card-header');
+            const packedCb = card.querySelector('.gear-packed-cb');
+            const btnDelete = card.querySelector('.btn-delete-collapsed');
+
+            cardHeader.addEventListener('click', (e) => {
+              if (e.target.closest('button, input, select, textarea, label, a, .list-card-header-actions, .gear-packed-wrapper, .btn-icon-delete')) {
+                return;
+              }
+              readAllExpandedCards();
+              expandedCardIds.add(item.id);
+              render();
+            });
+
+            cardHeader.addEventListener('keydown', (e) => {
+              if (e.target === cardHeader && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                readAllExpandedCards();
+                expandedCardIds.add(item.id);
+                render();
+              }
+            });
+
+            if (packedCb) {
+              packedCb.addEventListener('click', (e) => e.stopPropagation());
+              packedCb.addEventListener('change', (e) => {
+                e.stopPropagation();
+                item.packed = packedCb.checked;
+                card.classList.toggle('card-packed', item.packed);
+                onSave();
+                render();
+              });
+            }
+
+            if (btnDelete) {
+              btnDelete.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!isGearItemEmpty(item)) {
+                  if (!window.confirm(`Delete "${title}"?`)) return;
+                }
+                const idx = trek.gear.findIndex((g) => g.id === item.id);
+                if (idx >= 0) {
+                  trek.gear.splice(idx, 1);
+                  expandedCardIds.delete(item.id);
+                  onSave();
+                  render();
+                }
+              });
+            }
+          } else {
+            // Expanded Card
+            const catOptionsHtml = Object.entries(GEAR_CATEGORIES)
+              .filter(([k]) => k !== 'gemma' || item.category === 'gemma')
+              .map(([k, label]) => `<option value="${k}" ${item.category === k ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+              .join('');
+
+            card.innerHTML = `
+              <div
+                class="list-card-header expanded"
+                role="button"
+                tabindex="0"
+                aria-expanded="true"
+                aria-label="Collapse ${escapeHtml(title)}"
+              >
+                <div class="list-card-header-top">
+                  <span class="list-card-toggle-icon" aria-hidden="true">▾</span>
+                  <span class="list-card-title">${escapeHtml(title)}</span>
+                </div>
+              </div>
+              <div class="list-card-body">
+                <div class="form-group">
+                  <label class="form-label">Item</label>
+                  <input type="text" name="item" class="text-input" value="${escapeHtml(item.item || '')}" placeholder="e.g. Sleeping bag" />
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="text-input">
+                      ${catOptionsHtml}
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Source</label>
+                    <select name="source" class="text-input">
+                      <option value="${SOURCES.HAVE}" ${item.source === SOURCES.HAVE ? 'selected' : ''}>Have</option>
+                      <option value="${SOURCES.BORROW}" ${item.source === SOURCES.BORROW ? 'selected' : ''}>Borrow</option>
+                      <option value="${SOURCES.BUY}" ${item.source === SOURCES.BUY ? 'selected' : ''}>Buy</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="checkbox-label" for="gear-field-packed-${escapeHtml(item.id)}">
+                    <input type="checkbox" id="gear-field-packed-${escapeHtml(item.id)}" name="packed" ${item.packed ? 'checked' : ''} />
+                    <span>Packed</span>
+                  </label>
+                </div>
+
+                <div class="list-card-footer-buttons">
+                  <button type="button" class="btn btn-primary btn-done" aria-label="Done editing ${escapeHtml(title)}">Done</button>
+                  <button type="button" class="btn btn-danger btn-delete btn-delete-expanded" aria-label="Delete ${escapeHtml(title)}">Delete</button>
+                </div>
+              </div>
+            `;
+
+            const cardHeader = card.querySelector('.list-card-header');
+            const categorySelect = card.querySelector('[name="category"]');
+            const itemInput = card.querySelector('[name="item"]');
+            const sourceSelect = card.querySelector('[name="source"]');
+            const packedInput = card.querySelector('[name="packed"]');
+            const btnDone = card.querySelector('.btn-done');
+            const btnDeleteExp = card.querySelector('.btn-delete-expanded');
+
+            const collapseThisCard = () => {
+              readCardFields(card, item);
+              expandedCardIds.delete(item.id);
+              cleanupEmptyItems();
+              onSave();
+              render();
+            };
+
+            cardHeader.addEventListener('click', collapseThisCard);
+            cardHeader.addEventListener('keydown', (e) => {
+              if (e.target === cardHeader && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                collapseThisCard();
+              }
+            });
+
+            // Live updates for item, source, packed
+            [itemInput, sourceSelect, packedInput].forEach((el) => {
+              if (!el) return;
+              const syncHandler = () => {
+                readCardFields(card, item);
+                onSave();
+                // update top counter live if packed changes
+                const curTotal = trek.gear.length;
+                const curPacked = trek.gear.filter((g) => g.packed).length;
+                counterBox.textContent = `${curPacked} of ${curTotal} packed`;
+              };
+              el.addEventListener('input', syncHandler);
+              el.addEventListener('change', syncHandler);
+            });
+
+            // Category select change: moves the item to the new section!
+            categorySelect.addEventListener('change', () => {
+              readCardFields(card, item);
+              const newCategory = categorySelect.value;
+              item.category = newCategory;
+              collapsedSections.delete(newCategory); // ensure target section is open
+              onSave();
+              render();
+
+              setTimeout(() => {
+                const movedCard = container.querySelector(`[data-id="${item.id}"]`);
+                movedCard?.querySelector('[name="category"]')?.focus();
+              }, 50);
+            });
+
+            btnDone.addEventListener('click', (e) => {
+              e.stopPropagation();
+              collapseThisCard();
+            });
+
+            btnDeleteExp.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (!isGearItemEmpty(item)) {
+                if (!window.confirm(`Delete "${title}"?`)) return;
+              }
+              const idx = trek.gear.findIndex((g) => g.id === item.id);
+              if (idx >= 0) {
+                trek.gear.splice(idx, 1);
+                expandedCardIds.delete(item.id);
+                onSave();
+                render();
+              }
+            });
+          }
+
+          cardsWrap.appendChild(card);
+        });
+
+        bodyEl.appendChild(cardsWrap);
+        sectionGroup.appendChild(bodyEl);
+      }
+
+      sectionsWrapper.appendChild(sectionGroup);
+    });
+
+    // Row below visible sections: "Add to another section:"
+    const otherSectionRow = document.createElement('div');
+    otherSectionRow.className = 'gear-add-other-section-row';
+
+    let otherRowHtml = '';
+    if (emptyCategories.length > 0) {
+      otherRowHtml += `
+        <div class="gear-add-other-controls-wrap">
+          <label for="gear-other-section-select" class="form-label">Add to another section:</label>
+          <div class="gear-add-other-controls">
+            <select id="gear-other-section-select" class="text-input" aria-label="Select empty section to add item to">
+              ${emptyCategories.map((k) => `<option value="${k}">${escapeHtml(GEAR_CATEGORIES[k])}</option>`).join('')}
+            </select>
+            <button type="button" id="btn-add-other-section" class="btn btn-add">+ Add</button>
+          </div>
+        </div>
+      `;
+    }
+
+    if (isFirstAidEmpty) {
+      otherRowHtml += `
+        <div class="gear-other-first-aid-wrap">
+          <button type="button" id="btn-add-first-aid-supplies" class="btn btn-add btn-block btn-add-first-aid-supplies">Add common first-aid supplies</button>
+          <div id="gear-supplies-note" class="gear-supplies-note" role="status" aria-live="polite" ${suppliesNote.hidden ? 'hidden' : ''}>${escapeHtml(suppliesNote.text)}</div>
+        </div>
+      `;
+    }
+
+    otherSectionRow.innerHTML = otherRowHtml;
+
+    const btnAddOther = otherSectionRow.querySelector('#btn-add-other-section');
+    if (btnAddOther) {
+      btnAddOther.addEventListener('click', () => {
+        const selectEl = otherSectionRow.querySelector('#gear-other-section-select');
+        const selectedCat = selectEl?.value || emptyCategories[0];
+        if (!selectedCat) return;
+
+        readAllExpandedCards();
+        cleanupEmptyItems();
+        expandedCardIds.clear();
+
+        const newItem = {
+          id: crypto.randomUUID(),
+          item: '',
+          category: selectedCat,
+          source: SOURCES.HAVE,
+          packed: false,
+        };
+        trek.gear.push(newItem);
+        expandedCardIds.add(newItem.id);
+        collapsedSections.delete(selectedCat);
+        onSave();
+        render();
+
+        setTimeout(() => {
+          const cardEl = container.querySelector(`[data-id="${newItem.id}"]`);
+          cardEl?.querySelector('input[name="item"]')?.focus();
+        }, 50);
+      });
+    }
+
+    const btnSuppliesEmpty = otherSectionRow.querySelector('.btn-add-first-aid-supplies');
+    if (btnSuppliesEmpty) {
+      btnSuppliesEmpty.addEventListener('click', () => {
+        addCommonSupplies();
+      });
+    }
+
+    sectionsWrapper.appendChild(otherSectionRow);
+    container.appendChild(sectionsWrapper);
+  }
+
+  render();
 }
 
 // Renders and binds the Food & ration section including items list and resupply points textarea.
@@ -989,12 +1445,30 @@ function renderFoodSection(container, trek, onSave) {
   });
 }
 
-// Renders and binds the Safety section with emergency contacts, trusted person, and notes.
+// Renders and binds the redesigned Safety section with 5 blocks and share action.
 function renderSafetySection(container, trek, onSave) {
   if (!trek.safety || typeof trek.safety !== 'object') {
     trek.safety = {
       contacts: [],
-      trustedPerson: { name: '', phone: '', hasItinerary: false, expectedReturn: '' },
+      trustedPerson: {
+        name: '',
+        phone: '',
+        hasItinerary: false,
+        expectedReturn: '',
+        alertBy: '',
+        checkInPlan: '',
+        instructions: '',
+      },
+      essentials: {
+        firstAid: false,
+        medicines: false,
+        headlamp: false,
+        powerBank: false,
+        offlineMap: false,
+        whistle: false,
+      },
+      emergencyNumber: '112',
+      medicines: '',
       nearestHelp: '',
       network: '',
     };
@@ -1003,21 +1477,43 @@ function renderSafetySection(container, trek, onSave) {
     trek.safety.contacts = [];
   }
   if (!trek.safety.trustedPerson) {
-    trek.safety.trustedPerson = { name: '', phone: '', hasItinerary: false, expectedReturn: '' };
+    trek.safety.trustedPerson = {
+      name: '',
+      phone: '',
+      hasItinerary: false,
+      expectedReturn: '',
+      alertBy: '',
+      checkInPlan: '',
+      instructions: '',
+    };
+  }
+  if (!trek.safety.essentials || typeof trek.safety.essentials !== 'object') {
+    trek.safety.essentials = {
+      firstAid: false,
+      medicines: false,
+      headlamp: false,
+      powerBank: false,
+      offlineMap: false,
+      whistle: false,
+    };
+  }
+  if (typeof trek.safety.medicines !== 'string') {
+    trek.safety.medicines = '';
+  }
+  if (typeof trek.safety.emergencyNumber !== 'string' || !trek.safety.emergencyNumber.trim()) {
+    trek.safety.emergencyNumber = '112';
   }
 
   const tp = trek.safety.trustedPerson;
+  const alertParts = splitIsoDateTime(tp.alertBy || '');
+  const essentials = trek.safety.essentials;
 
   container.innerHTML = `
-    <!-- 1. Emergency contacts list -->
+    <!-- 1. Home contact -->
     <div class="safety-block">
-      <h3 class="safety-subheading">Emergency contacts</h3>
-      <div id="safety-contacts-container"></div>
-    </div>
+      <h3 class="safety-subheading">Home contact</h3>
+      <div class="safety-hint">Someone at home who knows your plan and raises the alarm if you don't check in.</div>
 
-    <!-- 2. Trusted person at home -->
-    <div class="safety-block">
-      <h3 class="safety-subheading">Trusted person at home</h3>
       <div class="form-row">
         <div class="form-group">
           <label for="safety-tp-name" class="form-label">Name</label>
@@ -1032,7 +1528,7 @@ function renderSafetySection(container, trek, onSave) {
       <div class="form-group">
         <label class="checkbox-label" for="safety-tp-itinerary">
           <input type="checkbox" id="safety-tp-itinerary" ${tp.hasItinerary ? 'checked' : ''} />
-          <span>Has a copy of the itinerary?</span>
+          <span>Has a copy of the plan?</span>
         </label>
       </div>
 
@@ -1040,11 +1536,88 @@ function renderSafetySection(container, trek, onSave) {
         <label for="safety-tp-return" class="form-label">Expected return date</label>
         <input type="date" id="safety-tp-return" name="tpReturn" class="text-input" value="${escapeHtml(tp.expectedReturn || '')}" />
       </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="safety-tp-alert-date" class="form-label">Raise the alarm if no contact by</label>
+          <input type="date" id="safety-tp-alert-date" class="text-input" value="${escapeHtml(alertParts.date || '')}" />
+        </div>
+        <div class="form-group">
+          <label for="safety-tp-alert-time" class="form-label">Time (optional)</label>
+          <input type="time" id="safety-tp-alert-time" class="text-input" value="${escapeHtml(alertParts.time || '')}" />
+        </div>
+      </div>
+      <div class="form-help">The exact date and time your contact will call for help if they haven't heard from you.</div>
+
+      <div class="form-group">
+        <label for="safety-tp-checkin-plan" class="form-label">When you'll check in</label>
+        <input type="text" id="safety-tp-checkin-plan" class="text-input" value="${escapeHtml(tp.checkInPlan || '')}" placeholder="e.g. Each evening when there's signal" />
+      </div>
+
+      <div class="form-group">
+        <label for="safety-tp-instructions" class="form-label">What they should do</label>
+        <textarea id="safety-tp-instructions" class="text-input" rows="3" placeholder="e.g. Call the forest office at ..., then the local police at 112. Tell them our route is ...">${escapeHtml(tp.instructions || '')}</textarea>
+      </div>
     </div>
 
-    <!-- 3. Nearest help & mobile network -->
-    <div class="safety-block" style="border-bottom: none;">
-      <h3 class="safety-subheading">Trail safety notes</h3>
+    <!-- 2. Emergency contacts -->
+    <div class="safety-block">
+      <h3 class="safety-subheading">Emergency contacts</h3>
+      <div class="safety-hint">People to call when something goes wrong, including local help.</div>
+      <div id="safety-contacts-container"></div>
+    </div>
+
+    <!-- 3. Carrying? checklist -->
+    <div class="safety-block">
+      <h3 class="safety-subheading">Carrying?</h3>
+      <div class="safety-hint">Essential items that must be with you on the trail, not left in town.</div>
+      <div class="safety-essentials-grid">
+        <div class="essential-item-col">
+          <label class="checkbox-label" for="essential-first-aid">
+            <input type="checkbox" id="essential-first-aid" ${essentials.firstAid ? 'checked' : ''} />
+            <span>First-aid kit</span>
+          </label>
+          <a href="#/trek/${encodeURIComponent(trek.id)}/plan?s=gear" class="first-aid-gear-link">See first-aid items in Gear</a>
+        </div>
+        <label class="checkbox-label" for="essential-medicines">
+          <input type="checkbox" id="essential-medicines" ${essentials.medicines ? 'checked' : ''} />
+          <span>Personal medicines</span>
+        </label>
+        <label class="checkbox-label" for="essential-headlamp">
+          <input type="checkbox" id="essential-headlamp" ${essentials.headlamp ? 'checked' : ''} />
+          <span>Headlamp + spare batteries</span>
+        </label>
+        <label class="checkbox-label" for="essential-power-bank">
+          <input type="checkbox" id="essential-power-bank" ${essentials.powerBank ? 'checked' : ''} />
+          <span>Power bank</span>
+        </label>
+        <label class="checkbox-label" for="essential-offline-map">
+          <input type="checkbox" id="essential-offline-map" ${essentials.offlineMap ? 'checked' : ''} />
+          <span>Offline map / GPX downloaded</span>
+        </label>
+        <label class="checkbox-label" for="essential-whistle">
+          <input type="checkbox" id="essential-whistle" ${essentials.whistle ? 'checked' : ''} />
+          <span>Whistle</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top: 14px;">
+        <label for="safety-medicines" class="form-label">My medicines</label>
+        <div class="safety-hint">List what you're carrying. Ask a doctor what you need, especially for high altitude.</div>
+        <textarea id="safety-medicines" class="text-input" rows="2" placeholder="List what you're carrying...">${escapeHtml(trek.safety.medicines || '')}</textarea>
+      </div>
+    </div>
+
+    <!-- 4. Emergency number, nearest help, mobile network -->
+    <div class="safety-block">
+      <h3 class="safety-subheading">Emergency number, nearest help, mobile network</h3>
+      <div class="safety-hint">Keep these details handy for anyone who finds this phone.</div>
+
+      <div class="form-group">
+        <label for="safety-emergency-number" class="form-label">Emergency number</label>
+        <input type="tel" id="safety-emergency-number" class="text-input" value="${escapeHtml(trek.safety.emergencyNumber || '112')}" placeholder="112" />
+      </div>
+
       <div class="form-group">
         <label for="safety-nearest-help" class="form-label">Nearest help / road head</label>
         <textarea id="safety-nearest-help" class="text-input" rows="2" placeholder="Nearest hospital, police post, search & rescue contact...">${escapeHtml(trek.safety.nearestHelp || '')}</textarea>
@@ -1055,27 +1628,35 @@ function renderSafetySection(container, trek, onSave) {
         <textarea id="safety-network" class="text-input" rows="2" placeholder="Connectivity details (e.g. BSNL works till camp 2)...">${escapeHtml(trek.safety.network || '')}</textarea>
       </div>
     </div>
+
+    <!-- 5. Bottom button: Share plan -->
+    <div class="safety-block safety-share-block" style="border-bottom: none;">
+      <button type="button" id="btn-safety-share" class="btn btn-primary btn-block">Share plan</button>
+    </div>
   `;
 
-  // Bind trusted person and notes
+  // Bind Home contact fields
   const tpNameInput = container.querySelector('#safety-tp-name');
   const tpPhoneInput = container.querySelector('#safety-tp-phone');
   const tpItineraryCb = container.querySelector('#safety-tp-itinerary');
   const tpReturnInput = container.querySelector('#safety-tp-return');
-  const nearestHelpInput = container.querySelector('#safety-nearest-help');
-  const networkInput = container.querySelector('#safety-network');
+  const tpAlertDateInput = container.querySelector('#safety-tp-alert-date');
+  const tpAlertTimeInput = container.querySelector('#safety-tp-alert-time');
+  const tpCheckInPlanInput = container.querySelector('#safety-tp-checkin-plan');
+  const tpInstructionsInput = container.querySelector('#safety-tp-instructions');
 
   const tpHandler = () => {
     tp.name = tpNameInput.value;
     tp.phone = tpPhoneInput.value;
     tp.hasItinerary = tpItineraryCb.checked;
     tp.expectedReturn = tpReturnInput.value;
-    trek.safety.nearestHelp = nearestHelpInput.value;
-    trek.safety.network = networkInput.value;
+    tp.alertBy = combineDateAndTime(tpAlertDateInput.value, tpAlertTimeInput.value);
+    tp.checkInPlan = tpCheckInPlanInput.value;
+    tp.instructions = tpInstructionsInput.value;
     onSave();
   };
 
-  [tpNameInput, tpPhoneInput, tpReturnInput, nearestHelpInput, networkInput].forEach((input) => {
+  [tpNameInput, tpPhoneInput, tpReturnInput, tpAlertDateInput, tpAlertTimeInput, tpCheckInPlanInput, tpInstructionsInput].forEach((input) => {
     input.addEventListener('input', tpHandler);
     input.addEventListener('change', tpHandler);
   });
@@ -1088,23 +1669,33 @@ function renderSafetySection(container, trek, onSave) {
     emptyHint: 'No emergency contacts recorded yet.',
     addLabel: '+ Add emergency contact',
     getItemTitle: (c, idx) => (c.name && c.name.trim() ? c.name.trim() : `Contact ${idx + 1} (no name entered)`),
-    getItemSubtitle: (c) => [c.relation, c.phone].filter(Boolean).join(' • '),
+    getItemSubtitle: (c) => CONTACT_ROLE_LABELS[c.role] || CONTACT_ROLE_LABELS[CONTACT_ROLES.FAMILY],
+    getItemChips: (c) => {
+      if (!c.phone?.trim()) return '';
+      const cleanPhone = c.phone.replace(/\s+/g, '');
+      return `<a href="tel:${escapeHtml(cleanPhone)}" class="contact-call-link" onclick="event.stopPropagation()">📞 ${escapeHtml(c.phone.trim())}</a>`;
+    },
     createDefaultItem: () => ({
       id: crypto.randomUUID(),
       name: '',
-      relation: '',
+      role: CONTACT_ROLES.FAMILY,
       phone: '',
     }),
-    isItemEmpty: (c) => !c.name?.trim() && !c.relation?.trim() && !c.phone?.trim(),
+    isItemEmpty: (c) => !c.name?.trim() && !c.phone?.trim(),
     renderItemFields: (c) => `
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Contact name</label>
-          <input type="text" name="name" class="text-input" value="${escapeHtml(c.name || '')}" placeholder="Full name" />
+          <input type="text" name="name" class="text-input" value="${escapeHtml(c.name || '')}" placeholder="Full name or agency" />
         </div>
         <div class="form-group">
-          <label class="form-label">Relation</label>
-          <input type="text" name="relation" class="text-input" value="${escapeHtml(c.relation || '')}" placeholder="e.g. Sister, Friend" />
+          <label class="form-label">Role</label>
+          <select name="role" class="text-input">
+            <option value="${CONTACT_ROLES.FAMILY}" ${c.role === CONTACT_ROLES.FAMILY ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.FAMILY]}</option>
+            <option value="${CONTACT_ROLES.LOCAL_HELP}" ${c.role === CONTACT_ROLES.LOCAL_HELP ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.LOCAL_HELP]}</option>
+            <option value="${CONTACT_ROLES.GUIDE}" ${c.role === CONTACT_ROLES.GUIDE ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.GUIDE]}</option>
+            <option value="${CONTACT_ROLES.OTHER}" ${c.role === CONTACT_ROLES.OTHER ? 'selected' : ''}>${CONTACT_ROLE_LABELS[CONTACT_ROLES.OTHER]}</option>
+          </select>
         </div>
       </div>
       <div class="form-group">
@@ -1114,11 +1705,66 @@ function renderSafetySection(container, trek, onSave) {
     `,
     readItemFields: (cardEl, c) => {
       c.name = cardEl.querySelector('[name="name"]')?.value || '';
-      c.relation = cardEl.querySelector('[name="relation"]')?.value || '';
+      c.role = cardEl.querySelector('[name="role"]')?.value || CONTACT_ROLES.FAMILY;
       c.phone = cardEl.querySelector('[name="phone"]')?.value || '';
     },
     onUpdate: onSave,
   });
+
+  // Bind Carrying checklist
+  const essentialCbs = {
+    firstAid: container.querySelector('#essential-first-aid'),
+    medicines: container.querySelector('#essential-medicines'),
+    headlamp: container.querySelector('#essential-headlamp'),
+    powerBank: container.querySelector('#essential-power-bank'),
+    offlineMap: container.querySelector('#essential-offline-map'),
+    whistle: container.querySelector('#essential-whistle'),
+  };
+
+  Object.entries(essentialCbs).forEach(([key, cb]) => {
+    if (cb) {
+      cb.addEventListener('change', () => {
+        trek.safety.essentials[key] = cb.checked;
+        onSave();
+      });
+    }
+  });
+
+  // Bind My medicines
+  const safetyMedicinesInput = container.querySelector('#safety-medicines');
+  if (safetyMedicinesInput) {
+    const medHandler = () => {
+      trek.safety.medicines = safetyMedicinesInput.value;
+      onSave();
+    };
+    safetyMedicinesInput.addEventListener('input', medHandler);
+    safetyMedicinesInput.addEventListener('change', medHandler);
+  }
+
+  // Bind Emergency number, nearest help, mobile network
+  const emergencyNumberInput = container.querySelector('#safety-emergency-number');
+  const nearestHelpInput = container.querySelector('#safety-nearest-help');
+  const networkInput = container.querySelector('#safety-network');
+
+  const notesHandler = () => {
+    trek.safety.emergencyNumber = emergencyNumberInput.value.trim() || '112';
+    trek.safety.nearestHelp = nearestHelpInput.value;
+    trek.safety.network = networkInput.value;
+    onSave();
+  };
+
+  [emergencyNumberInput, nearestHelpInput, networkInput].forEach((input) => {
+    input.addEventListener('input', notesHandler);
+    input.addEventListener('change', notesHandler);
+  });
+
+  // Bind Share plan button
+  const btnShare = container.querySelector('#btn-safety-share');
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      sharePlan(trek);
+    });
+  }
 }
 
 // Renders the structured Plan view for sections 1–8 with section chips and auto-save.

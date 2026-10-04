@@ -5,7 +5,7 @@
 // background, code changes appear on the second load after an update.
 // Developers MUST add every new app file (HTML, CSS, JS, icon) to the APP_FILES precache list
 // below and bump the CACHE version whenever files are added, modified, or removed.
-const CACHE = 'trek-v4';
+const CACHE = 'trek-v7';
 
 const APP_FILES = [
   './',
@@ -18,6 +18,7 @@ const APP_FILES = [
   './js/app.js',
   './js/checks.js',
   './js/model.js',
+  './js/share.js',
   './js/store.js',
   './js/timeline.js',
   './js/ui.js',
@@ -26,6 +27,7 @@ const APP_FILES = [
   './js/views/plan.js',
   './js/views/review.js',
   './js/views/settings.js',
+  './js/views/today.js',
 ];
 
 // Pre-caches all app files on installation and skips waiting.

@@ -3,6 +3,7 @@ import { escapeHtml } from './model.js';
 import { renderHome } from './views/home.js';
 import { renderPlan } from './views/plan.js';
 import { renderDashboard } from './views/dashboard.js';
+import { renderToday } from './views/today.js';
 import { renderReview } from './views/review.js';
 import { renderSettings } from './views/settings.js';
 import { TABS, renderBottomTabBar } from './ui.js';
@@ -113,6 +114,11 @@ export function router() {
 
     if (tabKey === 'dashboard') {
       renderDashboard(appContainer, trekId);
+      return;
+    }
+
+    if (tabKey === 'today') {
+      renderToday(appContainer, trekId);
       return;
     }
 

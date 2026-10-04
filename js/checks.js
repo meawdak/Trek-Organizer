@@ -22,7 +22,7 @@ export function getLocalTodayIso() {
 }
 
 // Calculates calendar day difference between two YYYY-MM-DD dates in UTC without timezone shifts.
-function daysBetween(startIso, endIso) {
+export function daysBetween(startIso, endIso) {
   if (!startIso || !endIso) return null;
   const p1 = startIso.split('-').map(Number);
   const p2 = endIso.split('-').map(Number);
@@ -388,6 +388,26 @@ function formatLegRoute(leg) {
       id: 'warning-tp-no-itinerary',
       level: 'warning',
       message: 'Trusted person does not have a copy of the itinerary.',
+      section: 'safety',
+    });
+  }
+
+  // 7b. First-aid kit isn't marked as packed in Safety
+  if (!trek.safety?.essentials?.firstAid) {
+    warnings.push({
+      id: 'warning-safety-no-first-aid',
+      level: 'warning',
+      message: "First-aid kit isn't marked as packed in Safety.",
+      section: 'safety',
+    });
+  }
+
+  // 7c. Home contact is set but no alert time
+  if (trek.safety?.trustedPerson?.name?.trim() && !trek.safety?.trustedPerson?.alertBy) {
+    warnings.push({
+      id: 'warning-safety-no-alert-time',
+      level: 'warning',
+      message: "No 'raise the alarm' time is set for your home contact.",
       section: 'safety',
     });
   }

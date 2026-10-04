@@ -1,5 +1,5 @@
 import { formatDate, formatDateTime } from './ui.js';
-import { STAY_TYPE_LABELS } from './model.js';
+import { STAY_TYPE_LABELS, GEAR_CATEGORIES } from './model.js';
 
 export const SYSTEM_PROMPT = `You check a trek plan written by a trekker. You do NOT plan the trek and you do NOT invent facts.
 Write short, complete sentences (8 to 25 words). Each sentence must say WHAT is missing or unclear and WHERE in the plan.
@@ -184,7 +184,8 @@ export function buildPlanSummary(trek) {
     const packedCount = trek.gear.filter((g) => g.packed).length;
     const gearLines = trek.gear.map((g) => {
       const parts = [g.item?.trim() || 'Item'];
-      if (g.category?.trim()) parts.push(`category: ${g.category.trim()}`);
+      const catLabel = GEAR_CATEGORIES[g.category] || g.category;
+      if (catLabel?.trim()) parts.push(`category: ${catLabel.trim()}`);
       if (g.source) parts.push(`source: ${g.source}`);
       parts.push(g.packed ? 'status: packed' : 'status: not packed');
       return parts.join(', ');
@@ -251,6 +252,9 @@ export function buildPlanSummary(trek) {
   }
   if (sf.network?.trim()) {
     safetyLines.push(`Mobile network notes: ${sf.network.trim()}`);
+  }
+  if (sf.medicines?.trim()) {
+    safetyLines.push(`Medicines: ${sf.medicines.trim()}`);
   }
 
   sections.push(`Safety:\n${safetyLines.length > 0 ? safetyLines.join('\n') : 'none recorded'}`);
